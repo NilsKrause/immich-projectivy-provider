@@ -11,7 +11,7 @@ Gli URL degli asset di Immich richiedono normalmente l'header `x-api-key`, quind
 Immich-Android-TV riescono a usare Immich come *wallpaper* (lo fanno solo come *screensaver*).
 
 Questo plugin risolve il problema sfruttando il fatto che Immich accetta la **stessa API key anche
-come query parameter `apikey`** (in alternativa all'header `x-api-key`). Il plugin restituisce quindi a
+come query parameter `apiKey`** (in alternativa all'header `x-api-key`). Il plugin restituisce quindi a
 Projectivy degli **URL diretti Immich** già autenticati, e Projectivy scarica le foto da sé — esattamente
 il meccanismo che il template ufficiale di Projectivy usa per i wallpaper di tipo `IMAGE` (un URL `http(s)`).
 
@@ -21,21 +21,21 @@ il meccanismo che il template ufficiale di Projectivy usa per i wallpaper di tip
 2. Il plugin interroga Immich (header `x-api-key`) per ottenere un elenco di asset
    (album scelto / preferiti / recenti / casuali).
 3. Costruisce un URL di anteprima per ogni foto:
-   `https://<server>/api/assets/<id>/thumbnail?size=preview&apikey=<chiave>`.
+   `https://<server>/api/assets/<id>/thumbnail?size=preview&apiKey=<chiave>`.
 4. Restituisce a Projectivy la lista di questi URL; Projectivy li scarica, li mette nella sua
    cache e li ruota col **suo** intervallo, finché la lista scade dopo `itemsCacheDurationMillis`.
 
-### Perché un URL diretto con `apikey` e non `content://`
+### Perché un URL diretto con `apiKey` e non `content://`
 
 | Opzione | Problema |
 |---|---|
 | URL Immich diretto senza chiave | richiede `x-api-key`, che Projectivy non può mandare |
-| URL Immich con `?apikey=<chiave>` | ✅ funziona: l'API key viaggia nella query string, niente header |
+| URL Immich con `?apiKey=<chiave>` | ✅ funziona: l'API key viaggia nella query string, niente header |
 | `file://` nella cache dell'app | la cache è privata dell'app; un'altra app (Projectivy) non può leggerla |
 | `content://` da un `ContentProvider` esportato | non è garantito che il loader `IMAGE` di Projectivy lo supporti (l'esempio ufficiale usa solo URL `http(s)` e `android.resource://`) |
 
-La query string `apikey` è supportata dal middleware di autenticazione di Immich
-(`AuthService.validate()` legge `x-api-key` header **oppure** il query parameter `apikey`).
+La query string `apiKey` è supportata dal middleware di autenticazione di Immich
+(`AuthService.validate()` legge `x-api-key` header **oppure** il query parameter `apiKey`).
 
 **Trade-off documentato**: l'API key finisce nella query string degli URL restituiti a
 Projectivy, quindi è salvata insieme agli URL nella cache/impostazioni di Projectivy. È lo
@@ -112,9 +112,9 @@ se allineato all'impostazione di Projectivy.
 - `GET  /api/albums` — elenco album
 - `POST /api/search/metadata` — ricerca asset (recenti, preferiti, album; filtro `filter` + `orderBy` + `size`)
 - `POST /api/search/random` — asset casuali
-- `GET  /api/assets/{id}/thumbnail?size=preview&apikey=<chiave>` — anteprima (JPEG) per lo sfondo
+- `GET  /api/assets/{id}/thumbnail?size=preview&apiKey=<chiave>` — anteprima (JPEG) per lo sfondo
 
-Autenticazione: header **`x-api-key`** per le chiamate del plugin; query parameter **`apikey`**
+Autenticazione: header **`x-api-key`** per le chiamate del plugin; query parameter **`apiKey`**
 per gli URL dei wallpaper che scarica Projectivy. Parsing con `org.json` (nessuna dipendenza
 extra). HTTP con **OkHttp** (puro Java/Kotlin, nessuna libreria nativa `.so` → compatibile con
 l'userspace a 32 bit del Fire TV).

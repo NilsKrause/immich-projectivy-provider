@@ -15,7 +15,7 @@ import tv.projectivy.plugin.wallpaperprovider.api.WallpaperType
  * [getWallpapers] to obtain the list of wallpapers to rotate.
  *
  * Immich image URLs require the `x-api-key` header, which Projectivy cannot send when it
- * downloads a wallpaper by URL. Immich also accepts the same API key as the `apikey`
+ * downloads a wallpaper by URL. Immich also accepts the same API key as the `apiKey`
  * query parameter, so this service returns **direct Immich thumbnail URLs** and lets
  * Projectivy download them itself — the exact mechanism the official Projectivy sample
  * uses for `IMAGE` wallpapers (a plain http(s) URL). No local cache or exported

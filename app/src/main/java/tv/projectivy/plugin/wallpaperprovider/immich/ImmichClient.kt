@@ -200,7 +200,7 @@ class ImmichClient {
     }
 
     /**
-     * Direct URL for a preview-sized thumbnail that carries the API key in the `apikey`
+     * Direct URL for a preview-sized thumbnail that carries the API key in the `apiKey`
      * query parameter. Immich accepts the API key this way as an alternative to the
      * `x-api-key` header, which is required here because Projectivy downloads the URL
      * itself and cannot attach custom headers.
@@ -209,7 +209,7 @@ class ImmichClient {
         Uri.parse("$baseUrl/api/assets/$assetId/thumbnail")
             .buildUpon()
             .appendQueryParameter("size", size)
-            .appendQueryParameter("apikey", apiKey)
+            .appendQueryParameter("apiKey", apiKey)
             .build()
             .toString()
 
