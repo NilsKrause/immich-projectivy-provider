@@ -1,3 +1,175 @@
+> 📖 This README is available in **English** (below) and in **Italiano** (scroll to "Versione italiana").
+> 📖 Questo README è disponibile in **inglese** (qui sotto) e in **italiano** (in fondo, sezione "Versione italiana").
+
+# Immich Wallpaper Provider for Projectivy Launcher
+
+**Wallpaper provider** plugin for [Projectivy Launcher](https://play.google.com/store/apps/details?id=com.spocky.projengmenu)
+that shows photos from your self-hosted [Immich](https://immich.app) server as the launcher wallpaper
+on Android TV / Fire TV (FireOS 7.x, Android 9, 32-bit userspace).
+
+## Why a dedicated plugin is needed
+
+Projectivy downloads the wallpaper URL itself, but it **cannot send custom headers**.
+Immich asset URLs normally require the `x-api-key` header, so neither Aerial Views nor
+Immich-Android-TV can use Immich as a *wallpaper* (they only work as a *screensaver*).
+
+This plugin solves the problem by exploiting the fact that Immich also accepts the **same API key
+as the `apiKey` query parameter** (as an alternative to the `x-api-key` header). The plugin therefore
+returns **authenticated direct Immich URLs** to Projectivy, and Projectivy downloads the photos
+itself — exactly the mechanism the official Projectivy template uses for `IMAGE` wallpapers (a plain
+`http(s)` URL).
+
+## How it works
+
+1. Projectivy binds to the plugin service and calls `getWallpapers()`.
+2. The plugin queries Immich (`x-api-key` header) to obtain a list of assets
+   (chosen album / favorites / recent / random).
+3. It builds a preview URL for each photo:
+   `https://<server>/api/assets/<id>/thumbnail?size=preview&apiKey=<key>`.
+4. It returns this list of URLs to Projectivy; Projectivy downloads them, stores them in its
+   own cache, and rotates them on its own interval, until the list expires after
+   `itemsCacheDurationMillis`.
+
+### Why a direct URL with `apiKey` and not `content://`
+
+| Option | Problem |
+|---|---|
+| Direct Immich URL without a key | requires `x-api-key`, which Projectivy cannot send |
+| Immich URL with `?apiKey=<key>` | ✅ works: the API key travels in the query string, no header needed |
+| `file://` in the app cache | the app cache is private; another app (Projectivy) cannot read it |
+| `content://` from an exported `ContentProvider` | not guaranteed that Projectivy's `IMAGE` loader supports it (the official example only uses `http(s)` and `android.resource://`) |
+
+The `apiKey` query string is supported by Immich's authentication middleware
+(`AuthService.validate()` reads the `x-api-key` header **or** the `apiKey` query parameter).
+
+**Documented trade-off**: the API key ends up in the query string of the URLs returned to
+Projectivy, so it is stored together with the URLs in Projectivy's cache/settings. This is the
+same exposure level the plugin already has by design: the key is exported in plain text by
+`getPreferences()` (for Projectivy's settings backup/restore) and lives in the app's
+`SharedPreferences`. The repository is public: **no server URL or API key is in the code**.
+
+## Requirements
+
+- **Projectivy Launcher Premium** (required for plugins).
+- An **Immich** server (v3) reachable from the Fire TV on the local network.
+- An **Immich API key** with these permissions: **`album.read`**, **`asset.read`**,
+  **`asset.view`**, **`asset.download`**.
+
+### Creating the API key
+
+1. Immich → User settings → **API Keys** → *New API Key*.
+2. Grant the permissions: `album.read`, `asset.read`, `asset.view`, `asset.download`.
+3. Copy the key; you'll need it in the plugin's settings screen.
+
+## Installation
+
+Build with GitHub Actions (see below) or download the APK from the release:
+
+```
+https://github.com/<YOUR-USER>/<YOUR-REPO>/releases/latest/download/immich-provider-debug.apk
+```
+
+Install on the Fire TV:
+
+```
+adb install -r immich-provider-debug.apk
+```
+
+Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immich Wallpaper Provider → Settings**.
+
+## Settings
+
+| Field | Meaning |
+|---|---|
+| **Server URL** | e.g. `https://immich.example.com` or `http://192.168.1.10:2283` (without `/api`) |
+| **API key** | masked on screen (`••••abcd`); editable |
+| **Test connection** | verifies URL + key; lists the album count and loads the album list |
+| **Source** | Recent / Favorites / Random / Album |
+| **Choose album** | opens the album list (requires *Test connection* or a valid connection) |
+| **Images to cache** | how many photos to return to Projectivy on each refresh (default 20) |
+| **Seconds per image** | see below — **advisory only** |
+| **Trust self-signed certificates** | enable only if your server uses a self-signed certificate |
+
+> **Self-signed certificate note**: *Trust self-signed certificates* affects the **plugin's**
+> HTTP client (listing albums, test connection, asset search). The actual wallpaper download is
+> done by **Projectivy** using the direct URLs, so with a self-signed HTTPS server the wallpaper
+> may not load even if "Test connection" works. On a local network, the most reliable approach is
+> to use an `http://` URL (e.g. `http://192.168.1.10:2283`).
+
+## The "seconds per image" question (honest take)
+
+The rotation interval is **governed by Projectivy's timer**, not the plugin. The plugin only
+controls:
+
+- **which/how many** photos to return;
+- `itemsCacheDurationMillis` (static manifest metadata) = how long Projectivy keeps the
+  list before requesting it again.
+
+This plugin's **"Seconds per image"** setting is therefore **advisory**: it is saved and shown, but
+it cannot force a rotation faster than the launcher's minimum (**30 seconds** since v4.70). To align
+them, set the same value in **Projectivy → Appearance → Wallpaper → change interval** (minimum 30 s).
+Below 30 seconds the launcher's minimum still applies. *Nothing is simulated*: the value only takes
+effect if aligned with Projectivy's setting.
+
+## Immich APIs used (verified against the OpenAPI v3.x spec)
+
+- `GET  /api/albums` — album list
+- `POST /api/search/metadata` — asset search (recent, favorites, album; `filter` + `orderBy` + `size`)
+- `POST /api/search/random` — random assets
+- `GET  /api/assets/{id}/thumbnail?size=preview&apiKey=<key>` — preview (JPEG) for the wallpaper
+
+Authentication: **`x-api-key`** header for the plugin's calls; **`apiKey`** query parameter for the
+wallpaper URLs that Projectivy downloads. Parsing with `org.json` (no extra dependency). HTTP with
+**OkHttp** (pure Java/Kotlin, no native `.so` library → compatible with the Fire TV's 32-bit userspace).
+
+## Common errors
+
+| Error | Likely cause |
+|---|---|
+| `Invalid API key (401)` | wrong or revoked key |
+| `API key lacks permission (403)` | missing one of the `album.read` / `asset.read` / `asset.view` permissions |
+| `Not found (404)` | wrong server URL |
+| `Cannot reach server` | server off / network / wrong port |
+| SSL handshake failed | self-signed certificate → use `http://` on the local network, or enable *Trust self-signed* (but see note above) |
+
+## Building
+
+### GitHub Actions (recommended — no local SDK required)
+
+The `.github/workflows/build.yml` workflow:
+
+1. sets up **JDK 17** and **Gradle 8.9** (`gradle/actions/setup-gradle`);
+2. builds a **debug**-signed APK (`:app:assembleDebug` — installs without a keystore);
+3. publishes it as a workflow **artifact** and as a **GitHub Release** asset.
+
+On every push to the main branch it creates/updates a **`latest`** release; on a `v*` tag it creates
+a release named after the tag. The direct link is therefore:
+
+```
+https://github.com/<user>/<repo>/releases/latest/download/immich-provider-debug.apk
+```
+
+### Locally
+
+You need JDK 17 + Android SDK (platform 35). Then:
+
+```
+./gradlew :app:assembleDebug
+```
+
+## Known notes and limitations
+
+- **`itemsCacheDurationMillis` = 30 min**: static (from the manifest), not changeable at runtime.
+  With this value Projectivy reuses the same photo list for 30 minutes before requesting it again
+  from the plugin.
+- The **API key is exported in plain text** by `getPreferences()` (for Projectivy's settings
+  backup/restore), in the device's `SharedPreferences` and in the wallpaper URLs' query string:
+  the same exposure level as any app that stores a key.
+- The device is weak: the asset search is a single fast call; the preview download is done by
+  Projectivy with its own loader and cache.
+
+---
+
 # Immich Wallpaper Provider per Projectivy Launcher
 
 Plugin **wallpaper provider** per [Projectivy Launcher](https://play.google.com/store/apps/details?id=com.spocky.projengmenu)
