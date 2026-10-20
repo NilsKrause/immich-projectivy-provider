@@ -79,15 +79,6 @@
                 android:value="1" />
         </service>
 
-        <!-- Serves cached wallpaper JPEGs to Projectivy via content:// URIs.
-             Exported deliberately: Projectivy reads the URI without an intent grant,
-             and only the cached image files (never the API key) are exposed. -->
-        <provider
-            android:name=".WallpaperImageProvider"
-            android:authorities="tv.projectivy.plugin.wallpaperprovider.immich.provider"
-            android:exported="true"
-            android:grantUriPermissions="true"
-            tools:ignore="ExportedContentProvider" />
     </application>
 
 </manifest>

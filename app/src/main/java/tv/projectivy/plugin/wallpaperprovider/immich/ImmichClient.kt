@@ -1,5 +1,6 @@
 package tv.projectivy.plugin.wallpaperprovider.immich
 
+import android.net.Uri
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -73,7 +74,12 @@ class ImmichClient {
         }
     }
 
-    /** Strips a trailing "/" or "/api" so the base can be joined with "/api/...". */
+    /**
+     * Normalizes the user-entered base URL so it can be joined with "/api/...".
+     * Strips a trailing "/" or "/api" (with any trailing slashes), but preserves any
+     * path prefix (e.g. a reverse proxy at "https://host/immich"), which is then followed
+     * by "/api/...".
+     */
     fun normalizeBaseUrl(raw: String): String {
         var url = raw.trim().trimEnd('/')
         if (url.endsWith("/api", ignoreCase = true)) {
@@ -193,21 +199,19 @@ class ImmichClient {
         return result
     }
 
-    /** Downloads a preview-sized image; returns the raw bytes or null on any failure. */
-    fun fetchImage(baseUrl: String, apiKey: String, trustSsl: Boolean, assetId: String, size: String): ByteArray? {
-        val request = Request.Builder()
-            .url("$baseUrl/api/assets/$assetId/thumbnail?size=$size")
-            .header("x-api-key", apiKey)
-            .get()
+    /**
+     * Direct URL for a preview-sized thumbnail that carries the API key in the `apikey`
+     * query parameter. Immich accepts the API key this way as an alternative to the
+     * `x-api-key` header, which is required here because Projectivy downloads the URL
+     * itself and cannot attach custom headers.
+     */
+    fun thumbnailUrl(baseUrl: String, apiKey: String, assetId: String, size: String = "preview"): String =
+        Uri.parse("$baseUrl/api/assets/$assetId/thumbnail")
+            .buildUpon()
+            .appendQueryParameter("size", size)
+            .appendQueryParameter("apikey", apiKey)
             .build()
-        return try {
-            client(trustSsl).newCall(request).execute().use { response ->
-                if (!response.isSuccessful) null else response.body?.bytes()
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
+            .toString()
 
     fun testConnection(baseUrl: String, apiKey: String, trustSsl: Boolean): TestResult {
         return try {

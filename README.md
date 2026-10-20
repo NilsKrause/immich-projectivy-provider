@@ -6,35 +6,42 @@ su Android TV / Fire TV (FireOS 7.x, Android 9, userspace a 32 bit).
 
 ## Perché serve un plugin dedicato
 
-Projectivy scarica da sé l'URL del wallpaper e **non può inviare header personalizzati**.
-Gli URL degli asset di Immich richiedono l'header `x-api-key`, quindi né Aerial Views né
+Projectivy scarica da sé l'URL del wallpaper, ma **non può inviare header personalizzati**.
+Gli URL degli asset di Immich richiedono normalmente l'header `x-api-key`, quindi né Aerial Views né
 Immich-Android-TV riescono a usare Immich come *wallpaper* (lo fanno solo come *screensaver*).
 
-Questo plugin risolve il problema scaricando **lui stesso** le foto con la API key e
-servendole a Projectivy come file locali tramite un `ContentProvider` (vedi sotto).
+Questo plugin risolve il problema sfruttando il fatto che Immich accetta la **stessa API key anche
+come query parameter `apikey`** (in alternativa all'header `x-api-key`). Il plugin restituisce quindi a
+Projectivy degli **URL diretti Immich** già autenticati, e Projectivy scarica le foto da sé — esattamente
+il meccanismo che il template ufficiale di Projectivy usa per i wallpaper di tipo `IMAGE` (un URL `http(s)`).
 
 ## Come funziona
 
 1. Projectivy si collega al servizio del plugin e chiama `getWallpapers()`.
 2. Il plugin interroga Immich (header `x-api-key`) per ottenere un elenco di asset
    (album scelto / preferiti / recenti / casuali).
-3. Scarica la versione **`preview`** di ogni foto (non l'originale da molti MB) e la salva
-   nella cache su disco dell'app.
-4. Restituisce a Projectivy una lista di `content://` URI serviti da un `ContentProvider`
-   locale; Projectivy li ruota col **suo** intervallo.
+3. Costruisce un URL di anteprima per ogni foto:
+   `https://<server>/api/assets/<id>/thumbnail?size=preview&apikey=<chiave>`.
+4. Restituisce a Projectivy la lista di questi URL; Projectivy li scarica, li mette nella sua
+   cache e li ruota col **suo** intervallo, finché la lista scade dopo `itemsCacheDurationMillis`.
 
-### Perché `content://` e non `file://` o URL diretti
+### Perché un URL diretto con `apikey` e non `content://`
 
 | Opzione | Problema |
 |---|---|
-| URL Immich diretto | richiede `x-api-key`, che Projectivy non può mandare |
-| `file://` nella cache dell'app | la cache è privata dell'app; un'altra app (Projectivy) non può leggerla (SELinux/UID) |
-| `androidx FileProvider` | rifiuta di essere esportato e richiede grant via intent, che Projectivy non fa |
-| **`content://` da un ContentProvider custom esportato** | funziona via `ContentResolver`, esattamente come lo schema `android.resource://` usato dall'esempio ufficiale |
+| URL Immich diretto senza chiave | richiede `x-api-key`, che Projectivy non può mandare |
+| URL Immich con `?apikey=<chiave>` | ✅ funziona: l'API key viaggia nella query string, niente header |
+| `file://` nella cache dell'app | la cache è privata dell'app; un'altra app (Projectivy) non può leggerla |
+| `content://` da un `ContentProvider` esportato | non è garantito che il loader `IMAGE` di Projectivy lo supporti (l'esempio ufficiale usa solo URL `http(s)` e `android.resource://`) |
 
-**Trade-off documentato**: il `ContentProvider` è esportato (`exported=true`), quindi
-qualsiasi app sul device può leggere le foto in cache. Sono **solo i file JPEG in cache**,
-mai la API key (che resta nelle `SharedPreferences` dell'app).
+La query string `apikey` è supportata dal middleware di autenticazione di Immich
+(`AuthService.validate()` legge `x-api-key` header **oppure** il query parameter `apikey`).
+
+**Trade-off documentato**: l'API key finisce nella query string degli URL restituiti a
+Projectivy, quindi è salvata insieme agli URL nella cache/impostazioni di Projectivy. È lo
+stesso livello di esposizione che il plugin ha già per design: la chiave è esportata in chiaro
+da `getPreferences()` (per il backup/ripristino delle impostazioni di Projectivy) e risiede nelle
+`SharedPreferences` dell'app. Il repo è pubblico: **nessun URL del server né API key nel codice**.
 
 ## Requisiti
 
@@ -76,8 +83,13 @@ Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immi
 | **Choose album** | apre l'elenco album (richiede *Test connection* o una connessione valida) |
 | **Images to cache** | quante foto restituire a Projectivy a ogni refresh (default 20) |
 | **Seconds per image** | vedi sotto — **solo indicativo** |
-| **Cache size limit (MB)** | limite di spazio su disco per le anteprime (default 200 MB) |
 | **Trust self-signed certificates** | abilita solo se il tuo server usa un certificato autofirmato |
+
+> **Nota sul certificato autofirmato**: la voce *Trust self-signed certificates* agisce sul
+> client HTTP **del plugin** (elencare album, test connessione, ricerca asset). Il download
+> effettivo dei wallpaper lo fa **Projectivy** con i suoi URL diretti, quindi con un server
+> HTTPS autofirmato il wallpaper potrebbe non caricarsi anche se "Test connection" funziona.
+> Su una rete locale, l'approccio più affidabile è usare l'URL `http://` (es. `http://192.168.1.10:2283`).
 
 ## La questione dei "secondi per immagine" (lettura onesta)
 
@@ -100,11 +112,12 @@ se allineato all'impostazione di Projectivy.
 - `GET  /api/albums` — elenco album
 - `POST /api/search/metadata` — ricerca asset (recenti, preferiti, album; filtro `filter` + `orderBy` + `size`)
 - `POST /api/search/random` — asset casuali
-- `GET  /api/assets/{id}/thumbnail?size=preview` — anteprima (JPEG) per lo sfondo
+- `GET  /api/assets/{id}/thumbnail?size=preview&apikey=<chiave>` — anteprima (JPEG) per lo sfondo
 
-Autenticazione: header **`x-api-key`** su ogni richiesta. Parsing con `org.json` (nessuna
-dipendenza extra). HTTP con **OkHttp** (puro Java/Kotlin, nessuna libreria nativa `.so` →
-compatibile con l'userspace a 32 bit del Fire TV).
+Autenticazione: header **`x-api-key`** per le chiamate del plugin; query parameter **`apikey`**
+per gli URL dei wallpaper che scarica Projectivy. Parsing con `org.json` (nessuna dipendenza
+extra). HTTP con **OkHttp** (puro Java/Kotlin, nessuna libreria nativa `.so` → compatibile con
+l'userspace a 32 bit del Fire TV).
 
 ## Errori comuni
 
@@ -114,7 +127,7 @@ compatibile con l'userspace a 32 bit del Fire TV).
 | `API key lacks permission (403)` | manca uno dei permessi `album.read` / `asset.read` / `asset.view` |
 | `Not found (404)` | URL del server errato |
 | `Cannot reach server` | server spento / rete / porta sbagliata |
-| handshake SSL fallito | certificato autofirmato → attiva *Trust self-signed certificates* |
+| handshake SSL fallito | certificato autofirmato → usa `http://` in rete locale, o attiva *Trust self-signed* (ma vedi nota sopra) |
 
 ## Compilazione
 
@@ -143,17 +156,11 @@ Serve JDK 17 + Android SDK (platform 35). Poi:
 
 ## Note e limiti noti
 
-- **Nessuna prova su dispositivo**: questo codice è stato scritto senza poterlo compilare o
-  eseguire su Fire TV; il primo test reale lo fa l'utente. Verificare soprattutto:
-  1. che Projectivy accetti `content://` URI per il tipo `IMAGE` (atteso: sì, come da
-     `android.resource://` dell'esempio; in caso negativo servirebbe un piccolo server HTTP
-     locale incorporato nel plugin o i link di condivisione pubblici di Immich);
-  2. il flusso di configurazione con il telecomando (input testuale via IME leanback).
 - **`itemsCacheDurationMillis` = 30 min**: statico (dal manifest), non modificabile a runtime.
+  Con questo valore Projectivy riusa la stessa lista di foto per 30 minuti prima di chiederla
+  di nuovo al plugin.
 - La **API key è esportata in chiaro** da `getPreferences()` (per il backup/ripristino delle
-  impostazioni di Projectivy) e nelle `SharedPreferences` del device: stesso livello di
-  esposizione di qualsiasi app che salva una chiave. Il repo è pubblico: **nessun URL del
-  server né API key nel codice**.
-- Il device è debole: il download delle anteprime è sequenziale con timeout brevi e la cache
-  su disco ha un limite configurabile; su rete lenta il primo `getWallpapers()` può richiedere
-  qualche secondo (le chiamate successive colpiscono la cache).
+  impostazioni di Projectivy), nelle `SharedPreferences` del device e nella query string degli
+  URL dei wallpaper: stesso livello di esposizione di qualsiasi app che salva una chiave.
+- Il device è debole: la ricerca asset è un'unica chiamata veloce; il download delle anteprime
+  lo fa Projectivy col proprio loader e la propria cache.

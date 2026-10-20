@@ -73,9 +73,6 @@ class SettingsFragment : GuidedStepSupportFragment() {
         // Seconds per image (advisory)
         actions.add(numberAction(ACTION_SECONDS, R.string.setting_seconds_per_image, PreferencesManager.secondsPerImage))
 
-        // Cache size limit
-        actions.add(numberAction(ACTION_CACHE_LIMIT, R.string.setting_cache_limit, PreferencesManager.cacheLimitMb))
-
         // Trust self-signed certificates (checkbox)
         actions.add(
             GuidedAction.Builder(requireContext())
@@ -121,11 +118,6 @@ class SettingsFragment : GuidedStepSupportFragment() {
                 parseAndStore(action) { PreferencesManager.secondsPerImage = it }
                 action.description = PreferencesManager.secondsPerImage.toString()
                 refresh(ACTION_SECONDS)
-            }
-            ACTION_CACHE_LIMIT -> {
-                parseAndStore(action) { PreferencesManager.cacheLimitMb = it }
-                action.description = PreferencesManager.cacheLimitMb.toString()
-                refresh(ACTION_CACHE_LIMIT)
             }
             ACTION_TRUST_SSL -> PreferencesManager.trustSsl = action.isChecked
         }
@@ -212,7 +204,6 @@ class SettingsFragment : GuidedStepSupportFragment() {
         private const val ACTION_CHOOSE_ALBUM = 14L
         private const val ACTION_IMAGE_COUNT = 20L
         private const val ACTION_SECONDS = 21L
-        private const val ACTION_CACHE_LIMIT = 22L
         private const val ACTION_TRUST_SSL = 30L
 
         private const val CHECKSET_SOURCE = 1

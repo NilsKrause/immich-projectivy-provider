@@ -22,8 +22,6 @@
     <string name="setting_image_count_desc">Wallpapers returned per refresh</string>
     <string name="setting_seconds_per_image">Seconds per image</string>
     <string name="setting_seconds_per_image_desc">Advisory only: Projectivy controls the real rotation interval (minimum 30 s)</string>
-    <string name="setting_cache_limit">Cache size limit (MB)</string>
-    <string name="setting_cache_limit_desc">Disk used by cached previews</string>
     <string name="setting_trust_ssl">Trust self-signed certificates</string>
     <string name="setting_trust_ssl_desc">Only enable for a server you control</string>
 

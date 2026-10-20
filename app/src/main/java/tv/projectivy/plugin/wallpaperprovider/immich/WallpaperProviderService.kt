@@ -14,9 +14,12 @@ import tv.projectivy.plugin.wallpaperprovider.api.WallpaperType
  * Projectivy wallpaper-provider plugin. Projectivy binds to this service and calls
  * [getWallpapers] to obtain the list of wallpapers to rotate.
  *
- * Because Immich image URLs require the `x-api-key` header (which Projectivy cannot
- * send), this service downloads "preview"-size images itself and returns
- * `content://` URIs backed by [WallpaperImageProvider].
+ * Immich image URLs require the `x-api-key` header, which Projectivy cannot send when it
+ * downloads a wallpaper by URL. Immich also accepts the same API key as the `apikey`
+ * query parameter, so this service returns **direct Immich thumbnail URLs** and lets
+ * Projectivy download them itself — the exact mechanism the official Projectivy sample
+ * uses for `IMAGE` wallpapers (a plain http(s) URL). No local cache or exported
+ * ContentProvider is needed.
  */
 class WallpaperProviderService : Service() {
 
@@ -49,52 +52,31 @@ class WallpaperProviderService : Service() {
         val baseUrl = client.normalizeBaseUrl(PreferencesManager.serverUrl)
         val apiKey = PreferencesManager.apiKey
         val trustSsl = PreferencesManager.trustSsl
-        val cache = WallpaperCache(this)
 
-        // Best-effort fresh asset list (never let a network failure block the call).
-        val fresh = try {
+        // Only the asset list is fetched here (one quick request). Projectivy downloads the
+        // image bytes itself from the returned URLs on its own threads, so this binder call
+        // stays fast even on slow networks.
+        val assets = try {
             client.fetchAssets(
                 baseUrl, apiKey, trustSsl,
                 PreferencesManager.source, PreferencesManager.albumId, PreferencesManager.imageCount
             )
+        } catch (e: ImmichException) {
+            Log.w(TAG, "fetchAssets failed (HTTP ${e.httpCode}): ${e.message}")
+            emptyList()
         } catch (e: Exception) {
-            Log.w(TAG, "fetchAssets failed: ${e.message}")
+            Log.w(TAG, "fetchAssets failed: ${e.message}", e)
             emptyList()
         }
 
-        val titles = fresh.associate { it.id to it.fileName }
-
-        // Candidate ids: fresh assets (shuffled for variety) or, as a fallback when the
-        // list fetch failed, whatever is already on disk so the wallpaper keeps working.
-        val ids: List<String> = if (fresh.isNotEmpty()) {
-            fresh.shuffled().map { it.id }
-        } else {
-            cache.listCachedAssetIds()
+        val wallpapers = assets.shuffled().map { asset ->
+            Wallpaper(
+                uri = client.thumbnailUrl(baseUrl, apiKey, asset.id),
+                type = WallpaperType.IMAGE,
+                displayMode = WallpaperDisplayMode.CROP,
+                title = asset.fileName.takeIf { it.isNotBlank() }
+            )
         }
-
-        val wallpapers = ArrayList<Wallpaper>(ids.size)
-        for (id in ids) {
-            try {
-                val file = cache.ensureCached(id) {
-                    client.fetchImage(baseUrl, apiKey, trustSsl, id, WallpaperCache.PREVIEW_SIZE)
-                }
-                if (file != null) {
-                    val title = titles[id]?.takeIf { it.isNotBlank() }
-                    wallpapers.add(
-                        Wallpaper(
-                            uri = cache.uriFor(id).toString(),
-                            type = WallpaperType.IMAGE,
-                            displayMode = WallpaperDisplayMode.CROP,
-                            title = title
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Caching asset $id failed: ${e.message}")
-            }
-        }
-
-        cache.enforceSizeLimit(PreferencesManager.cacheLimitMb * 1024L * 1024L)
 
         Log.i(TAG, "Returning ${wallpapers.size} wallpapers")
         return wallpapers
