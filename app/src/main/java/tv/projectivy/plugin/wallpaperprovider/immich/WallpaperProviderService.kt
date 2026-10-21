@@ -2,7 +2,9 @@ package tv.projectivy.plugin.wallpaperprovider.immich
 
 import android.app.Service
 import android.content.Intent
+import android.os.Binder
 import android.os.IBinder
+import android.os.Process
 import android.util.Log
 import tv.projectivy.plugin.wallpaperprovider.api.Event
 import tv.projectivy.plugin.wallpaperprovider.api.IWallpaperProviderService
@@ -34,12 +36,47 @@ class WallpaperProviderService : Service() {
     override fun onBind(intent: Intent): IBinder = binder
 
     private val binder = object : IWallpaperProviderService.Stub() {
-        override fun getWallpapers(event: Event?): List<Wallpaper> = buildWallpapers()
+        override fun getWallpapers(event: Event?): List<Wallpaper> {
+            assertCallerIsLauncher()
+            return buildWallpapers()
+        }
 
-        override fun getPreferences(): String = PreferencesManager.export()
+        override fun getPreferences(): String {
+            assertCallerIsLauncher()
+            return PreferencesManager.export()
+        }
 
         override fun setPreferences(params: String) {
+            assertCallerIsLauncher()
             PreferencesManager.import(params)
+        }
+    }
+
+    /**
+     * Rejects binder calls from anything but Projectivy.
+     *
+     * This service must be `exported` for Projectivy to bind it, and `android:permission`
+     * is not an option because Projectivy holds no permission of ours - so without a check
+     * here, every method is reachable by any app on the device. All three are sensitive,
+     * not just the obvious one: [getPreferences] returns the Immich API key verbatim,
+     * [setPreferences] can repoint `server_url` and switch on `trust_ssl` (enabling the
+     * trust-all X509TrustManager), and [getWallpapers] returns URLs that carry the key in
+     * their query string. A UID comparison is the whole fix; package visibility for the
+     * lookup is already declared via `<queries>` in the manifest.
+     *
+     * `getApplicationInfo().uid` rather than `getPackageUid()`, which needs API 24 > minSdk.
+     */
+    private fun assertCallerIsLauncher() {
+        val callingUid = Binder.getCallingUid()
+        if (callingUid == Process.myUid()) return
+        val allowedUid = try {
+            packageManager.getApplicationInfo(PROJECTIVY_PACKAGE, 0).uid
+        } catch (e: Exception) {
+            Log.w(TAG, "$PROJECTIVY_PACKAGE not installed; rejecting uid $callingUid")
+            -1
+        }
+        if (callingUid != allowedUid) {
+            throw SecurityException("uid $callingUid is not $PROJECTIVY_PACKAGE")
         }
     }
 
@@ -84,5 +121,6 @@ class WallpaperProviderService : Service() {
 
     companion object {
         private const val TAG = "ImmichWallpaper"
+        private const val PROJECTIVY_PACKAGE = "com.spocky.projengmenu"
     }
 }

@@ -17,7 +17,7 @@
     </queries>
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:label="@string/plugin_name"
         android:supportsRtl="true"
         android:icon="@drawable/ic_launcher"
