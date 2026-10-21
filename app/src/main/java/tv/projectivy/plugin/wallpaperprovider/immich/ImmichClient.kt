@@ -1,6 +1,5 @@
 package tv.projectivy.plugin.wallpaperprovider.immich
 
-import android.net.Uri
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -34,7 +33,7 @@ data class TestResult(
  *   GET  /api/albums                     -> list albums (x-api-key)
  *   POST /api/search/metadata            -> search assets (filter + orderBy + size)
  *   POST /api/search/random              -> random assets (filter + size)
- *   GET  /api/assets/{id}/thumbnail?size=preview -> image bytes (JPEG)
+ *   GET  /api/assets/{id}/thumbnail?size=preview -> image bytes (JPEG, x-api-key)
  *
  * Every request is authenticated with the `x-api-key` header.
  */
@@ -194,7 +193,7 @@ class ImmichClient {
             val type = o.optString("type", "IMAGE")
             // Anything the user took off the timeline should not surface on a living-room
             // TV. Immich enforces the locked folder server-side for API-key sessions, but
-            // archived and hidden assets come back unless excluded here.
+            // archived and hidden assets are returned unless excluded here.
             val visibility = o.optString("visibility", "timeline")
             val archived = o.optBoolean("isArchived", false)
             if (id.isNotBlank() && type == "IMAGE" && !archived &&
@@ -206,18 +205,27 @@ class ImmichClient {
     }
 
     /**
-     * Direct URL for a preview-sized thumbnail that carries the API key in the `apiKey`
-     * query parameter. Immich accepts the API key this way as an alternative to the
-     * `x-api-key` header, which is required here because Projectivy downloads the URL
-     * itself and cannot attach custom headers.
+     * Downloads a preview-sized image; returns the raw bytes or null on any failure.
+     *
+     * The key travels in the `x-api-key` header. The plugin deliberately does not build
+     * `...thumbnail?apiKey=<key>` URLs for Projectivy to fetch: Immich accepts that form,
+     * but it puts a credential for the entire library into Projectivy's cache and into the
+     * access log of any reverse proxy fronting Immich.
      */
-    fun thumbnailUrl(baseUrl: String, apiKey: String, assetId: String, size: String = "preview"): String =
-        Uri.parse("$baseUrl/api/assets/$assetId/thumbnail")
-            .buildUpon()
-            .appendQueryParameter("size", size)
-            .appendQueryParameter("apiKey", apiKey)
+    fun fetchImage(baseUrl: String, apiKey: String, trustSsl: Boolean, assetId: String, size: String): ByteArray? {
+        val request = Request.Builder()
+            .url("$baseUrl/api/assets/$assetId/thumbnail?size=$size")
+            .header("x-api-key", apiKey)
+            .get()
             .build()
-            .toString()
+        return try {
+            client(trustSsl).newCall(request).execute().use { response ->
+                if (!response.isSuccessful) null else response.body?.bytes()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     fun testConnection(baseUrl: String, apiKey: String, trustSsl: Boolean): TestResult {
         return try {

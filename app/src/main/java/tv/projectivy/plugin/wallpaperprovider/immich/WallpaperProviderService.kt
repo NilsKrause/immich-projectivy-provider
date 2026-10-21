@@ -17,20 +17,20 @@ import tv.projectivy.plugin.wallpaperprovider.api.WallpaperType
  * [getWallpapers] to obtain the list of wallpapers to rotate.
  *
  * Immich image URLs require the `x-api-key` header, which Projectivy cannot send when it
- * downloads a wallpaper by URL. Immich also accepts the same API key as the `apiKey`
- * query parameter, so this service returns **direct Immich thumbnail URLs** and lets
- * Projectivy download them itself — the exact mechanism the official Projectivy sample
- * uses for `IMAGE` wallpapers (a plain http(s) URL). No local cache or exported
- * ContentProvider is needed.
+ * downloads a wallpaper by URL. So this service downloads the previews itself and returns
+ * `content://` URIs backed by [WallpaperImageProvider], granting read access per URI to
+ * Projectivy alone. The Immich API key never leaves this process.
  */
 class WallpaperProviderService : Service() {
 
     private lateinit var client: ImmichClient
+    private lateinit var cache: WallpaperCache
 
     override fun onCreate() {
         super.onCreate()
         PreferencesManager.init(this)
         client = ImmichClient()
+        cache = WallpaperCache(this)
     }
 
     override fun onBind(intent: Intent): IBinder = binder
@@ -56,15 +56,12 @@ class WallpaperProviderService : Service() {
      * Rejects binder calls from anything but Projectivy.
      *
      * This service must be `exported` for Projectivy to bind it, and `android:permission`
-     * is not an option because Projectivy holds no permission of ours - so without a check
+     * is not an option because Projectivy holds no permission of ours — so without a check
      * here, every method is reachable by any app on the device. All three are sensitive,
-     * not just the obvious one: [getPreferences] returns the Immich API key verbatim,
-     * [setPreferences] can repoint `server_url` and switch on `trust_ssl` (enabling the
-     * trust-all X509TrustManager), and [getWallpapers] returns URLs that carry the key in
-     * their query string. A UID comparison is the whole fix; package visibility for the
-     * lookup is already declared via `<queries>` in the manifest.
-     *
-     * `getApplicationInfo().uid` rather than `getPackageUid()`, which needs API 24 > minSdk.
+     * not just the obvious one: [getPreferences] returns the API key verbatim,
+     * [setPreferences] can repoint `server_url` and switch on `trust_ssl`, and
+     * [getWallpapers] hands back readable image URIs. A UID comparison is the whole fix;
+     * package visibility for the lookup is already declared via `<queries>` in the manifest.
      */
     private fun assertCallerIsLauncher() {
         val callingUid = Binder.getCallingUid()
@@ -90,9 +87,6 @@ class WallpaperProviderService : Service() {
         val apiKey = PreferencesManager.apiKey
         val trustSsl = PreferencesManager.trustSsl
 
-        // One request, but a synchronous one, inside the binder transaction: OkHttp is
-        // configured with an 8 s connect and 20 s read timeout, so a slow or half-dead
-        // Immich can block the caller for roughly that long.
         val assets = try {
             client.fetchAssets(
                 baseUrl, apiKey, trustSsl,
@@ -106,21 +100,46 @@ class WallpaperProviderService : Service() {
             emptyList()
         }
 
-        val wallpapers = assets.shuffled().map { asset ->
+        // Projectivy is blocked in a binder transaction for the duration of this call, so
+        // the downloads get a wall-clock budget: a slow or half-dead Immich must not hold
+        // the launcher indefinitely. Anything already cached from an earlier pass is still
+        // served, so exhausting the budget degrades the rotation rather than emptying it.
+        val deadline = System.currentTimeMillis() + DOWNLOAD_BUDGET_MS
+        var fetched = 0
+        for (asset in assets) {
+            if (System.currentTimeMillis() > deadline) {
+                Log.i(TAG, "Download budget spent after $fetched asset(s); serving the cache")
+                break
+            }
+            val file = cache.ensureCached(asset.id) {
+                client.fetchImage(baseUrl, apiKey, trustSsl, asset.id, WallpaperCache.PREVIEW_SIZE)
+            }
+            if (file != null) fetched++
+        }
+        cache.enforceSizeLimit(MAX_CACHE_BYTES)
+
+        val titles = assets.associate { it.id to it.fileName }
+        val wallpapers = cache.listCachedAssetIds().shuffled().map { assetId ->
+            val uri = cache.uriFor(assetId)
+            // Ad-hoc grants do not survive a reboot; re-issuing them on every call is what
+            // keeps that self-healing, since Projectivy re-asks once the item cache expires.
+            grantUriPermission(PROJECTIVY_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             Wallpaper(
-                uri = client.thumbnailUrl(baseUrl, apiKey, asset.id),
+                uri = uri.toString(),
                 type = WallpaperType.IMAGE,
                 displayMode = WallpaperDisplayMode.CROP,
-                title = asset.fileName.takeIf { it.isNotBlank() }
+                title = titles[assetId]?.takeIf { it.isNotBlank() }
             )
         }
 
-        Log.i(TAG, "Returning ${wallpapers.size} wallpapers")
+        Log.i(TAG, "Returning ${wallpapers.size} wallpapers ($fetched newly downloaded)")
         return wallpapers
     }
 
     companion object {
         private const val TAG = "ImmichWallpaper"
         private const val PROJECTIVY_PACKAGE = "com.spocky.projengmenu"
+        private const val DOWNLOAD_BUDGET_MS = 20_000L
+        private const val MAX_CACHE_BYTES = 64L * 1024 * 1024
     }
 }
