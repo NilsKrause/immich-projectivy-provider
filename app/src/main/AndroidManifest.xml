@@ -22,7 +22,8 @@
         android:supportsRtl="true"
         android:icon="@drawable/ic_launcher"
         android:banner="@drawable/ic_banner"
-        android:theme="@style/Theme.ProjectivyWallpaperProvider">
+        android:theme="@style/Theme.ProjectivyWallpaperProvider"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".SettingsActivity"
