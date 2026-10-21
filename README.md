@@ -53,12 +53,12 @@ same exposure level the plugin already has by design: the key is exported in pla
 - **Projectivy Launcher Premium** (required for plugins).
 - An **Immich** server (v3) reachable from the Fire TV on the local network.
 - An **Immich API key** with these permissions: **`album.read`**, **`asset.read`**,
-  **`asset.view`**, **`asset.download`**.
+  **`asset.view`**.
 
 ### Creating the API key
 
 1. Immich → User settings → **API Keys** → *New API Key*.
-2. Grant the permissions: `album.read`, `asset.read`, `asset.view`, `asset.download`.
+2. Grant the permissions: `album.read`, `asset.read`, `asset.view`.
 3. Copy the key; you'll need it in the plugin's settings screen.
 
 ## Installation
@@ -223,12 +223,12 @@ da `getPreferences()` (per il backup/ripristino delle impostazioni di Projectivy
 - **Projectivy Launcher Premium** (necessario per i plugin).
 - Un server **Immich** (v3) raggiungibile dal Fire TV sulla rete locale.
 - Una **API key Immich** con questi permessi: **`album.read`**, **`asset.read`**,
-  **`asset.view`**, **`asset.download`**.
+  **`asset.view`**.
 
 ### Creare la API key
 
 1. Immich → Impostazioni utente → **API Keys** → *New API Key*.
-2. Concedi i permessi: `album.read`, `asset.read`, `asset.view`, `asset.download`.
+2. Concedi i permessi: `album.read`, `asset.read`, `asset.view`.
 3. Copia la chiave; servirà nella schermata di configurazione del plugin.
 
 ## Installazione
