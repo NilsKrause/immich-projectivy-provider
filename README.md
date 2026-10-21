@@ -66,13 +66,13 @@ same exposure level the plugin already has by design: the key is exported in pla
 Build with GitHub Actions (see below) or download the APK from the release:
 
 ```
-https://github.com/<YOUR-USER>/<YOUR-REPO>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<YOUR-USER>/<YOUR-REPO>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 Install on the Fire TV:
 
 ```
-adb install -r immich-provider-debug.apk
+adb install -r immich-provider-<version>.apk
 ```
 
 Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immich Wallpaper Provider → Settings**.
@@ -147,7 +147,7 @@ On every push to the main branch it creates/updates a **`latest`** release; on a
 a release named after the tag. The direct link is therefore:
 
 ```
-https://github.com/<user>/<repo>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<user>/<repo>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 ### Locally
@@ -237,13 +237,13 @@ da `getPreferences()` (per il backup/ripristino delle impostazioni di Projectivy
 Compila con GitHub Actions (vedi sotto) oppure scarica l'APK dalla release:
 
 ```
-https://github.com/<TUO-UTENTE>/<TUO-REPO>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<TUO-UTENTE>/<TUO-REPO>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 Installa sul Fire TV:
 
 ```
-adb install -r immich-provider-debug.apk
+adb install -r immich-provider-<version>.apk
 ```
 
 Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immich Wallpaper Provider → Impostazioni**.
@@ -320,7 +320,7 @@ Su ogni push al ramo principale crea/aggiorna una release **`latest`**; su un ta
 una release col nome del tag. Il link diretto è quindi:
 
 ```
-https://github.com/<utente>/<repo>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<utente>/<repo>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 ### In locale
