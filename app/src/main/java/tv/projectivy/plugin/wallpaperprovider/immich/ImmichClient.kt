@@ -192,7 +192,13 @@ class ImmichClient {
             val o = arr.optJSONObject(i) ?: continue
             val id = o.optString("id", "")
             val type = o.optString("type", "IMAGE")
-            if (id.isNotBlank() && type == "IMAGE") {
+            // Anything the user took off the timeline should not surface on a living-room
+            // TV. Immich enforces the locked folder server-side for API-key sessions, but
+            // archived and hidden assets come back unless excluded here.
+            val visibility = o.optString("visibility", "timeline")
+            val archived = o.optBoolean("isArchived", false)
+            if (id.isNotBlank() && type == "IMAGE" && !archived &&
+                visibility.equals("timeline", ignoreCase = true)) {
                 result.add(ImmichAsset(id, o.optString("originalFileName", "")))
             }
         }
