@@ -89,6 +89,7 @@ Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immi
 | **Images to cache** | how many photos to return to Projectivy on each refresh (default 20) |
 | **Seconds per image** | see below — **advisory only** |
 | **Trust self-signed certificates** | enable only if your server uses a self-signed certificate |
+| **Landscape photos only** | skip portrait photos (they can break Projectivy's UI on some TVs); default: on |
 
 > **Self-signed certificate note**: *Trust self-signed certificates* affects the **plugin's**
 > HTTP client (listing albums, test connection, asset search). The actual wallpaper download is
@@ -159,6 +160,9 @@ You need JDK 17 + Android SDK (platform 35). Then:
 
 ## Known notes and limitations
 
+- **Portrait wallpapers**: on some TVs a non-landscape wallpaper makes Projectivy mis-render its
+  whole UI (garbled clock, icon trails). The plugin therefore returns landscape/square photos only
+  by default ("Landscape photos only"); you can disable it in the settings.
 - **`itemsCacheDurationMillis` = 30 min**: static (from the manifest), not changeable at runtime.
   With this value Projectivy reuses the same photo list for 30 minutes before requesting it again
   from the plugin.
@@ -256,6 +260,7 @@ Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immi
 | **Images to cache** | quante foto restituire a Projectivy a ogni refresh (default 20) |
 | **Seconds per image** | vedi sotto — **solo indicativo** |
 | **Trust self-signed certificates** | abilita solo se il tuo server usa un certificato autofirmato |
+| **Landscape photos only** | salta le foto verticali (possono rompere la UI di Projectivy su alcune TV); default: attivo |
 
 > **Nota sul certificato autofirmato**: la voce *Trust self-signed certificates* agisce sul
 > client HTTP **del plugin** (elencare album, test connessione, ricerca asset). Il download
@@ -328,6 +333,9 @@ Serve JDK 17 + Android SDK (platform 35). Poi:
 
 ## Note e limiti noti
 
+- **Wallpaper verticali**: su alcune TV un wallpaper non orizzontale fa disegnare male l'intera UI
+  di Projectivy (orologio sfasato, scie sulle icone). Per questo il plugin restituisce di default
+  solo foto orizzontali/quadrate ("Landscape photos only"); puoi disattivarlo nelle impostazioni.
 - **`itemsCacheDurationMillis` = 30 min**: statico (dal manifest), non modificabile a runtime.
   Con questo valore Projectivy riusa la stessa lista di foto per 30 minuti prima di chiederla
   di nuovo al plugin.

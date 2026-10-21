@@ -52,6 +52,11 @@ class WallpaperProviderService : Service() {
         val baseUrl = client.normalizeBaseUrl(PreferencesManager.serverUrl)
         val apiKey = PreferencesManager.apiKey
         val trustSsl = PreferencesManager.trustSsl
+        val requested = PreferencesManager.imageCount
+        val landscapeOnly = PreferencesManager.landscapeOnly
+
+        // Fetch extra when filtering so we can still fill the requested count.
+        val fetchCount = if (landscapeOnly) minOf(requested * 3, 200) else requested
 
         // Only the asset list is fetched here (one quick request). Projectivy downloads the
         // image bytes itself from the returned URLs on its own threads, so this binder call
@@ -59,7 +64,7 @@ class WallpaperProviderService : Service() {
         val assets = try {
             client.fetchAssets(
                 baseUrl, apiKey, trustSsl,
-                PreferencesManager.source, PreferencesManager.albumId, PreferencesManager.imageCount
+                PreferencesManager.source, PreferencesManager.albumId, fetchCount
             )
         } catch (e: ImmichException) {
             Log.w(TAG, "fetchAssets failed (HTTP ${e.httpCode}): ${e.message}")
@@ -69,7 +74,11 @@ class WallpaperProviderService : Service() {
             emptyList()
         }
 
-        val wallpapers = assets.shuffled().map { asset ->
+        // Portrait wallpapers can make Projectivy mis-render the whole launcher UI on some
+        // TVs, so by default only landscape (or square) photos are returned.
+        val usable = (if (landscapeOnly) assets.filter { it.isLandscape } else assets).take(requested)
+
+        val wallpapers = usable.shuffled().map { asset ->
             Wallpaper(
                 uri = client.thumbnailUrl(baseUrl, apiKey, asset.id),
                 type = WallpaperType.IMAGE,

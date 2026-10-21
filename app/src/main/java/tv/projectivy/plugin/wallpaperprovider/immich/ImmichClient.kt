@@ -16,7 +16,14 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 data class ImmichAlbum(val id: String, val name: String)
-data class ImmichAsset(val id: String, val fileName: String)
+data class ImmichAsset(val id: String, val fileName: String, val width: Int = 0, val height: Int = 0) {
+    /**
+     * True when the asset is not portrait. Unknown dimensions are treated as usable.
+     * Portrait wallpapers are skipped by default because on some TVs Projectivy mis-renders
+     * the launcher UI around a non-landscape wallpaper.
+     */
+    val isLandscape: Boolean get() = width <= 0 || height <= 0 || width >= height
+}
 
 /** Thrown for any Immich API failure; [message] is safe to show the user. */
 class ImmichException(val httpCode: Int, override val message: String) : Exception(message)
@@ -193,7 +200,14 @@ class ImmichClient {
             val id = o.optString("id", "")
             val type = o.optString("type", "IMAGE")
             if (id.isNotBlank() && type == "IMAGE") {
-                result.add(ImmichAsset(id, o.optString("originalFileName", "")))
+                result.add(
+                    ImmichAsset(
+                        id = id,
+                        fileName = o.optString("originalFileName", ""),
+                        width = o.optInt("width", 0),
+                        height = o.optInt("height", 0)
+                    )
+                )
             }
         }
         return result

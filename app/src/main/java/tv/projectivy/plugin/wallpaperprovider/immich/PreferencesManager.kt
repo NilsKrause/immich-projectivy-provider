@@ -24,6 +24,7 @@ object PreferencesManager {
     private const val KEY_IMAGE_COUNT = "image_count"
     private const val KEY_SECONDS = "seconds_per_image"
     private const val KEY_TRUST_SSL = "trust_ssl"
+    private const val KEY_LANDSCAPE_ONLY = "landscape_only"
 
     const val SOURCE_RECENT = "recent"
     const val SOURCE_FAVORITES = "favorites"
@@ -73,6 +74,14 @@ object PreferencesManager {
         get() = prefs.getBoolean(KEY_TRUST_SSL, false)
         set(value) = prefs.edit().putBoolean(KEY_TRUST_SSL, value).apply()
 
+    /**
+     * When true (default), only non-portrait photos are returned. Portrait wallpapers make
+     * Projectivy mis-render its UI around the wallpaper on some TVs.
+     */
+    var landscapeOnly: Boolean
+        get() = prefs.getBoolean(KEY_LANDSCAPE_ONLY, true)
+        set(value) = prefs.edit().putBoolean(KEY_LANDSCAPE_ONLY, value).apply()
+
     /** True once the minimum required configuration is present. */
     val isConfigured: Boolean
         get() = serverUrl.isNotBlank() && apiKey.isNotBlank()
@@ -94,6 +103,7 @@ object PreferencesManager {
         json.put(KEY_IMAGE_COUNT, imageCount)
         json.put(KEY_SECONDS, secondsPerImage)
         json.put(KEY_TRUST_SSL, trustSsl)
+        json.put(KEY_LANDSCAPE_ONLY, landscapeOnly)
         return json.toString()
     }
 
@@ -121,6 +131,7 @@ object PreferencesManager {
             if (json.has(KEY_IMAGE_COUNT)) editor.putInt(KEY_IMAGE_COUNT, intValue(json, KEY_IMAGE_COUNT, DEFAULT_IMAGE_COUNT).coerceIn(1, 100))
             if (json.has(KEY_SECONDS)) editor.putInt(KEY_SECONDS, intValue(json, KEY_SECONDS, DEFAULT_SECONDS).coerceIn(MIN_SECONDS, MAX_SECONDS))
             if (json.has(KEY_TRUST_SSL)) editor.putBoolean(KEY_TRUST_SSL, boolValue(json, KEY_TRUST_SSL))
+            if (json.has(KEY_LANDSCAPE_ONLY)) editor.putBoolean(KEY_LANDSCAPE_ONLY, boolValue(json, KEY_LANDSCAPE_ONLY))
             editor.apply()
             true
         } catch (e: Exception) {

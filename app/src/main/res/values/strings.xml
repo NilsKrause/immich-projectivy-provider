@@ -24,6 +24,8 @@
     <string name="setting_seconds_per_image_desc">Advisory only: Projectivy controls the real rotation interval (minimum 30 s)</string>
     <string name="setting_trust_ssl">Trust self-signed certificates</string>
     <string name="setting_trust_ssl_desc">Only enable for a server you control</string>
+    <string name="setting_landscape_only">Landscape photos only</string>
+    <string name="setting_landscape_only_desc">Skip portrait photos (they can break Projectivy\'s UI on some TVs)</string>
 
     <string name="choose_album_title">Choose an album</string>
     <string name="choose_album_desc">Select the album whose photos will be shown.</string>

@@ -83,6 +83,17 @@ class SettingsFragment : GuidedStepSupportFragment() {
                 .checked(PreferencesManager.trustSsl)
                 .build()
         )
+
+        // Landscape photos only (checkbox)
+        actions.add(
+            GuidedAction.Builder(requireContext())
+                .id(ACTION_LANDSCAPE_ONLY)
+                .title(getString(R.string.setting_landscape_only))
+                .description(getString(R.string.setting_landscape_only_desc))
+                .checkSetId(CHECKSET_LANDSCAPE)
+                .checked(PreferencesManager.landscapeOnly)
+                .build()
+        )
     }
 
     override fun onGuidedActionClicked(action: GuidedAction) {
@@ -120,6 +131,7 @@ class SettingsFragment : GuidedStepSupportFragment() {
                 refresh(ACTION_SECONDS)
             }
             ACTION_TRUST_SSL -> PreferencesManager.trustSsl = action.isChecked
+            ACTION_LANDSCAPE_ONLY -> PreferencesManager.landscapeOnly = action.isChecked
         }
     }
 
@@ -205,8 +217,10 @@ class SettingsFragment : GuidedStepSupportFragment() {
         private const val ACTION_IMAGE_COUNT = 20L
         private const val ACTION_SECONDS = 21L
         private const val ACTION_TRUST_SSL = 30L
+        private const val ACTION_LANDSCAPE_ONLY = 31L
 
         private const val CHECKSET_SOURCE = 1
         private const val CHECKSET_SSL = 2
+        private const val CHECKSET_LANDSCAPE = 3
     }
 }
