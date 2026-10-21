@@ -90,9 +90,9 @@ class WallpaperProviderService : Service() {
         val apiKey = PreferencesManager.apiKey
         val trustSsl = PreferencesManager.trustSsl
 
-        // Only the asset list is fetched here (one quick request). Projectivy downloads the
-        // image bytes itself from the returned URLs on its own threads, so this binder call
-        // stays fast even on slow networks.
+        // One request, but a synchronous one, inside the binder transaction: OkHttp is
+        // configured with an 8 s connect and 20 s read timeout, so a slow or half-dead
+        // Immich can block the caller for roughly that long.
         val assets = try {
             client.fetchAssets(
                 baseUrl, apiKey, trustSsl,

@@ -93,8 +93,11 @@ Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immi
 > **Self-signed certificate note**: *Trust self-signed certificates* affects the **plugin's**
 > HTTP client (listing albums, test connection, asset search). The actual wallpaper download is
 > done by **Projectivy** using the direct URLs, so with a self-signed HTTPS server the wallpaper
-> may not load even if "Test connection" works. On a local network, the most reliable approach is
-> to use an `http://` URL (e.g. `http://192.168.1.10:2283`).
+> will not load even when "Test connection" succeeds - and this setting cannot help, because the
+> plugin is not the one making that request. An `http://` URL is **not** a workaround either:
+> with `targetSdk 34` and no `usesCleartextTraffic` declaration, Android blocks cleartext by
+> platform default. A certificate the device already trusts is currently the only arrangement
+> under which wallpapers load.
 
 ## The "seconds per image" question (honest take)
 
@@ -130,7 +133,7 @@ wallpaper URLs that Projectivy downloads. Parsing with `org.json` (no extra depe
 | `API key lacks permission (403)` | missing one of the `album.read` / `asset.read` / `asset.view` permissions |
 | `Not found (404)` | wrong server URL |
 | `Cannot reach server` | server off / network / wrong port |
-| SSL handshake failed | self-signed certificate → use `http://` on the local network, or enable *Trust self-signed* (but see note above) |
+| SSL handshake failed | self-signed certificate → enable *Trust self-signed* for the plugin's own requests. The wallpaper download is Projectivy's and cannot be covered by it; `http://` is blocked by platform default (see note above) |
 
 ## Building
 
@@ -260,8 +263,11 @@ Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immi
 > **Nota sul certificato autofirmato**: la voce *Trust self-signed certificates* agisce sul
 > client HTTP **del plugin** (elencare album, test connessione, ricerca asset). Il download
 > effettivo dei wallpaper lo fa **Projectivy** con i suoi URL diretti, quindi con un server
-> HTTPS autofirmato il wallpaper potrebbe non caricarsi anche se "Test connection" funziona.
-> Su una rete locale, l'approccio più affidabile è usare l'URL `http://` (es. `http://192.168.1.10:2283`).
+> HTTPS autofirmato il wallpaper non si carica anche se "Test connection" funziona -
+> e l'impostazione non può rimediare, perché quella richiesta non la fa il plugin. Nemmeno un
+> URL `http://` è una soluzione: con `targetSdk 34` e senza dichiarare `usesCleartextTraffic`,
+> Android blocca il traffico in chiaro per default. Al momento l'unica configurazione in cui i
+> wallpaper si caricano è un certificato già attendibile per il dispositivo.
 
 ## La questione dei "secondi per immagine" (lettura onesta)
 
@@ -299,7 +305,7 @@ l'userspace a 32 bit del Fire TV).
 | `API key lacks permission (403)` | manca uno dei permessi `album.read` / `asset.read` / `asset.view` |
 | `Not found (404)` | URL del server errato |
 | `Cannot reach server` | server spento / rete / porta sbagliata |
-| handshake SSL fallito | certificato autofirmato → usa `http://` in rete locale, o attiva *Trust self-signed* (ma vedi nota sopra) |
+| handshake SSL fallito | certificato autofirmato → attiva *Trust self-signed* per le richieste del plugin. Il download dei wallpaper lo fa Projectivy e non è coperto; `http://` è bloccato per default dalla piattaforma (vedi nota sopra) |
 
 ## Compilazione
 
