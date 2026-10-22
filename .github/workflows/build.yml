@@ -67,5 +67,5 @@ jobs:
           gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
           gh release create "$TAG" "$APK" \
             --title "Immich Provider ${{ steps.version.outputs.version }} ($TAG)" \
-            --notes "Automated build of version ${{ steps.version.outputs.version }} from commit ${GITHUB_SHA}." \
+            --notes-file CHANGELOG.md \
             --target "$GITHUB_SHA"
