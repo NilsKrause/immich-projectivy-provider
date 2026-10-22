@@ -26,6 +26,10 @@
     <string name="setting_trust_ssl_desc">Only enable for a server you control</string>
     <string name="setting_landscape_only">Landscape photos only</string>
     <string name="setting_landscape_only_desc">Skip portrait photos (they can break Projectivy\'s UI on some TVs)</string>
+    <string name="http_warning_title">Unencrypted connection</string>
+    <string name="http_warning_message">This server URL uses HTTP (unencrypted). Your Immich API key will be sent without encryption and could be read by anyone on your network. Continue anyway?</string>
+    <string name="http_warning_continue">Continue</string>
+    <string name="http_warning_cancel">Cancel</string>
 
     <string name="choose_album_title">Choose an album</string>
     <string name="choose_album_desc">Select the album whose photos will be shown.</string>

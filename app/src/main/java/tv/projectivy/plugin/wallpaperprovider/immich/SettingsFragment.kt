@@ -100,9 +100,11 @@ class SettingsFragment : GuidedStepSupportFragment() {
         when (action.id) {
             ACTION_SERVER_URL -> {
                 val value = action.editDescription?.toString()?.trim() ?: ""
-                PreferencesManager.serverUrl = value
-                action.description = value.ifBlank { getString(R.string.setting_server_url_desc) }
-                refresh(ACTION_SERVER_URL)
+                if (value.startsWith("http://", ignoreCase = true)) {
+                    HttpWarningFragment.show(requireFragmentManager(), value)
+                } else {
+                    saveServerUrl(value)
+                }
             }
             ACTION_API_KEY -> {
                 val value = action.editDescription?.toString()?.trim() ?: ""
@@ -140,6 +142,14 @@ class SettingsFragment : GuidedStepSupportFragment() {
         // Reflect an album picked in the sub-step.
         findActionById(ACTION_CHOOSE_ALBUM)?.description = currentAlbumDescription()
         refresh(ACTION_CHOOSE_ALBUM)
+
+        // Reflect a server URL accepted (or cleared) in the HTTP warning sub-step.
+        val saved = PreferencesManager.serverUrl
+        findActionById(ACTION_SERVER_URL)?.let {
+            it.editDescription = saved
+            it.description = saved.ifBlank { getString(R.string.setting_server_url_desc) }
+            refresh(ACTION_SERVER_URL)
+        }
     }
 
     // --- helpers -------------------------------------------------------------
@@ -165,6 +175,14 @@ class SettingsFragment : GuidedStepSupportFragment() {
 
     private fun currentAlbumDescription(): String =
         PreferencesManager.albumName.ifBlank { "(none)" }
+
+    private fun saveServerUrl(value: String) {
+        PreferencesManager.serverUrl = value
+        findActionById(ACTION_SERVER_URL)?.let {
+            it.description = value.ifBlank { getString(R.string.setting_server_url_desc) }
+            refresh(ACTION_SERVER_URL)
+        }
+    }
 
     private fun isChecked(id: Long): Boolean =
         findActionById(id)?.isChecked == true
