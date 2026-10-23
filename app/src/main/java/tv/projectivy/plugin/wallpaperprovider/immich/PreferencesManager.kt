@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.PreferenceManager
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -20,6 +21,7 @@ object PreferencesManager {
     private const val KEY_API_KEY = "api_key"
     private const val KEY_SOURCE = "source"
     private const val KEY_ALBUM_ID = "album_id"
+    private const val KEY_ALBUM_IDS = "album_ids"
     private const val KEY_ALBUM_NAME = "album_name"
     private const val KEY_IMAGE_COUNT = "image_count"
     private const val KEY_SECONDS = "seconds_per_image"
@@ -54,9 +56,31 @@ object PreferencesManager {
         get() = prefs.getString(KEY_SOURCE, SOURCE_RECENT) ?: SOURCE_RECENT
         set(value) = prefs.edit().putString(KEY_SOURCE, value).apply()
 
+    /** Legacy single-album id; kept in sync with [albumIds] for downgrade-compatible exports. */
     var albumId: String
         get() = prefs.getString(KEY_ALBUM_ID, "") ?: ""
         set(value) = prefs.edit().putString(KEY_ALBUM_ID, value).apply()
+
+    /**
+     * Selected album ids. Migrates the legacy single-album value on first read so users
+     * upgrading from the one-album version keep their choice.
+     */
+    var albumIds: List<String>
+        get() {
+            val raw = prefs.getString(KEY_ALBUM_IDS, null)
+            if (raw != null) return parseIds(raw)
+            val legacy = albumId
+            if (legacy.isNotBlank()) {
+                albumIds = listOf(legacy)
+                return listOf(legacy)
+            }
+            return emptyList()
+        }
+        set(value) {
+            val ids = value.distinct()
+            prefs.edit().putString(KEY_ALBUM_IDS, JSONArray(ids).toString()).apply()
+            albumId = ids.firstOrNull() ?: ""
+        }
 
     var albumName: String
         get() = prefs.getString(KEY_ALBUM_NAME, "") ?: ""
@@ -98,6 +122,7 @@ object PreferencesManager {
         json.put(KEY_SERVER_URL, serverUrl)
         json.put(KEY_API_KEY, apiKey)
         json.put(KEY_SOURCE, source)
+        json.put(KEY_ALBUM_IDS, JSONArray(albumIds))
         json.put(KEY_ALBUM_ID, albumId)
         json.put(KEY_ALBUM_NAME, albumName)
         json.put(KEY_IMAGE_COUNT, imageCount)
@@ -126,6 +151,13 @@ object PreferencesManager {
             if (json.has(KEY_SERVER_URL)) editor.putString(KEY_SERVER_URL, json.optString(KEY_SERVER_URL).trim())
             if (json.has(KEY_API_KEY)) editor.putString(KEY_API_KEY, json.optString(KEY_API_KEY).trim())
             if (json.has(KEY_SOURCE)) editor.putString(KEY_SOURCE, json.optString(KEY_SOURCE))
+            if (json.has(KEY_ALBUM_IDS)) {
+                val arr = json.optJSONArray(KEY_ALBUM_IDS)
+                val ids = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optString(it) }.distinct().filter { it.isNotBlank() }
+                editor.putString(KEY_ALBUM_IDS, JSONArray(ids).toString())
+            } else if (json.has(KEY_ALBUM_ID) && json.optString(KEY_ALBUM_ID).isNotBlank()) {
+                editor.putString(KEY_ALBUM_IDS, JSONArray(listOf(json.optString(KEY_ALBUM_ID))).toString())
+            }
             if (json.has(KEY_ALBUM_ID)) editor.putString(KEY_ALBUM_ID, json.optString(KEY_ALBUM_ID))
             if (json.has(KEY_ALBUM_NAME)) editor.putString(KEY_ALBUM_NAME, json.optString(KEY_ALBUM_NAME))
             if (json.has(KEY_IMAGE_COUNT)) editor.putInt(KEY_IMAGE_COUNT, intValue(json, KEY_IMAGE_COUNT, DEFAULT_IMAGE_COUNT).coerceIn(1, 100))
@@ -151,6 +183,13 @@ object PreferencesManager {
         is Boolean -> v
         is String -> v.trim().equals("true", ignoreCase = true)
         else -> false
+    }
+
+    private fun parseIds(raw: String): List<String> = try {
+        val arr = JSONArray(raw)
+        (0 until arr.length()).mapNotNull { arr.optString(it) }.filter { it.isNotBlank() }
+    } catch (e: Exception) {
+        emptyList()
     }
 
     private const val TAG = "ImmichPrefs"

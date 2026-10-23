@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.3
+
+- Allow selecting multiple albums: the album picker is now multi-select with a "Save selection" action, the album source searches all selected albums, and an existing single-album choice is migrated automatically.
+
 ## 0.0.2
 
 - Allow unencrypted HTTP connections (`android:usesCleartextTraffic="true"`) so the plugin can talk to a local Immich server over `http://` (thanks to @WildFireFlum, PR #1).
