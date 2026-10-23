@@ -23,7 +23,7 @@ itself — exactly the mechanism the official Projectivy template uses for `IMAG
 
 1. Projectivy binds to the plugin service and calls `getWallpapers()`.
 2. The plugin queries Immich (`x-api-key` header) to obtain a list of assets
-   (chosen album / favorites / recent / random).
+   (chosen albums / favorites / recent / random).
 3. It builds a preview URL for each photo:
    `https://<server>/api/assets/<id>/thumbnail?size=preview&apiKey=<key>`.
 4. It returns this list of URLs to Projectivy; Projectivy downloads them, stores them in its
@@ -85,7 +85,7 @@ Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immi
 | **API key** | masked on screen (`••••abcd`); editable |
 | **Test connection** | verifies URL + key; lists the album count and loads the album list |
 | **Source** | Recent / Favorites / Random / Album |
-| **Choose album** | opens the album list (requires *Test connection* or a valid connection) |
+| **Choose albums** | opens the album list and lets you select one or more albums (requires *Test connection* or a valid connection) |
 | **Images to cache** | how many photos to return to Projectivy on each refresh (default 20) |
 | **Seconds per image** | see below — **advisory only** |
 | **Trust self-signed certificates** | enable only if your server uses a self-signed certificate |

@@ -163,12 +163,12 @@ class ImmichClient {
         return result
     }
 
-    private fun buildSearchBody(source: String, albumId: String, count: Int): String {
+    private fun buildSearchBody(source: String, albumIds: List<String>, count: Int): String {
         val filter = JSONObject()
         filter.put("type", JSONObject().put("eq", "IMAGE"))
         when (source) {
             PreferencesManager.SOURCE_ALBUM ->
-                filter.put("albumIds", JSONObject().put("any", JSONArray().put(albumId)))
+                filter.put("albumIds", JSONObject().put("any", JSONArray(albumIds)))
             PreferencesManager.SOURCE_FAVORITES ->
                 filter.put("isFavorite", JSONObject().put("eq", true))
         }
@@ -181,12 +181,12 @@ class ImmichClient {
         return body.toString()
     }
 
-    fun fetchAssets(baseUrl: String, apiKey: String, trustSsl: Boolean, source: String, albumId: String, count: Int): List<ImmichAsset> {
+    fun fetchAssets(baseUrl: String, apiKey: String, trustSsl: Boolean, source: String, albumIds: List<String>, count: Int): List<ImmichAsset> {
         if (source == PreferencesManager.SOURCE_RANDOM) {
-            val body = apiPost(baseUrl, apiKey, trustSsl, "/search/random", buildSearchBody(source, albumId, count))
+            val body = apiPost(baseUrl, apiKey, trustSsl, "/search/random", buildSearchBody(source, albumIds, count))
             return parseAssetArray(JSONArray(body))
         }
-        val body = apiPost(baseUrl, apiKey, trustSsl, "/search/metadata", buildSearchBody(source, albumId, count))
+        val body = apiPost(baseUrl, apiKey, trustSsl, "/search/metadata", buildSearchBody(source, albumIds, count))
         val json = JSONObject(body)
         val assets = json.optJSONObject("assets")
         val items = assets?.optJSONArray("items") ?: JSONArray()

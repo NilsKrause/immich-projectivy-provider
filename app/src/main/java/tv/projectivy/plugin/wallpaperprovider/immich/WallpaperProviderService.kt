@@ -64,7 +64,7 @@ class WallpaperProviderService : Service() {
         val assets = try {
             client.fetchAssets(
                 baseUrl, apiKey, trustSsl,
-                PreferencesManager.source, PreferencesManager.albumId, fetchCount
+                PreferencesManager.source, PreferencesManager.albumIds, fetchCount
             )
         } catch (e: ImmichException) {
             Log.w(TAG, "fetchAssets failed (HTTP ${e.httpCode}): ${e.message}")
