@@ -42,6 +42,16 @@ object PreferencesManager {
 
     fun init(context: Context) {
         prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        migrateLegacyAlbum()
+    }
+
+    /** One-time migration from the legacy single-album field to the multi-album field. */
+    private fun migrateLegacyAlbum() {
+        if (prefs.contains(KEY_ALBUM_IDS)) return
+        val legacy = prefs.getString(KEY_ALBUM_ID, "").orEmpty()
+        if (legacy.isNotBlank()) {
+            prefs.edit().putString(KEY_ALBUM_IDS, JSONArray(listOf(legacy)).toString()).apply()
+        }
     }
 
     var serverUrl: String
@@ -62,19 +72,13 @@ object PreferencesManager {
         set(value) = prefs.edit().putString(KEY_ALBUM_ID, value).apply()
 
     /**
-     * Selected album ids. Migrates the legacy single-album value on first read so users
-     * upgrading from the one-album version keep their choice.
+     * Selected album ids. The legacy single-album value is migrated in [init] so this
+     * getter is a pure read.
      */
     var albumIds: List<String>
         get() {
             val raw = prefs.getString(KEY_ALBUM_IDS, null)
-            if (raw != null) return parseIds(raw)
-            val legacy = albumId
-            if (legacy.isNotBlank()) {
-                albumIds = listOf(legacy)
-                return listOf(legacy)
-            }
-            return emptyList()
+            return if (raw != null) parseIds(raw) else emptyList()
         }
         set(value) {
             val ids = value.distinct()

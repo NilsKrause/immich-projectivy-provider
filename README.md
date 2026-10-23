@@ -195,7 +195,7 @@ il meccanismo che il template ufficiale di Projectivy usa per i wallpaper di tip
 
 1. Projectivy si collega al servizio del plugin e chiama `getWallpapers()`.
 2. Il plugin interroga Immich (header `x-api-key`) per ottenere un elenco di asset
-   (album scelto / preferiti / recenti / casuali).
+   (album scelti / preferiti / recenti / casuali).
 3. Costruisce un URL di anteprima per ogni foto:
    `https://<server>/api/assets/<id>/thumbnail?size=preview&apiKey=<chiave>`.
 4. Restituisce a Projectivy la lista di questi URL; Projectivy li scarica, li mette nella sua
@@ -256,7 +256,7 @@ Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immi
 | **API key** | mascherata a schermo (`••••abcd`); modificabile |
 | **Test connection** | verifica URL + chiave; elenca il numero di album e carica l'elenco album |
 | **Sorgente** | Recenti / Preferiti / Casuali / Album |
-| **Choose album** | apre l'elenco album (richiede *Test connection* o una connessione valida) |
+| **Choose albums** | apre l'elenco album e ti fa selezionare uno o più album (richiede *Test connection* o una connessione valida) |
 | **Images to cache** | quante foto restituire a Projectivy a ogni refresh (default 20) |
 | **Seconds per image** | vedi sotto — **solo indicativo** |
 | **Trust self-signed certificates** | abilita solo se il tuo server usa un certificato autofirmato |
