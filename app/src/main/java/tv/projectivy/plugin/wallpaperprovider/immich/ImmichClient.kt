@@ -16,7 +16,13 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 data class ImmichAlbum(val id: String, val name: String)
-data class ImmichAsset(val id: String, val fileName: String, val width: Int = 0, val height: Int = 0) {
+data class ImmichAsset(
+    val id: String,
+    val fileName: String,
+    val width: Int = 0,
+    val height: Int = 0,
+    val mimeType: String = ""
+) {
     /**
      * True when the asset is not portrait. Unknown dimensions are treated as usable.
      * Portrait wallpapers are skipped by default because on some TVs Projectivy mis-renders
@@ -25,16 +31,13 @@ data class ImmichAsset(val id: String, val fileName: String, val width: Int = 0,
     val isLandscape: Boolean get() = width <= 0 || height <= 0 || width >= height
 
     /**
-     * True for camera RAW files (Sony .arw and friends). A TV cannot decode a RAW original,
-     * and Immich's preview for them is lower quality, so raw assets are always skipped.
+     * True when the original can be served at full resolution and still be decoded by a TV.
+     * HEIC, RAW and other formats fall back to Immich's JPEG preview instead.
      */
-    val isRaw: Boolean
-        get() = fileName.substringAfterLast('.', "").lowercase() in RAW_EXTENSIONS
+    val canServeOriginal: Boolean get() = mimeType in ORIGINAL_SAFE_MIME
 
     companion object {
-        private val RAW_EXTENSIONS = setOf(
-            "arw", "dng", "cr2", "cr3", "nef", "raf", "rw2", "orf", "srw", "srf", "pef", "x3f"
-        )
+        private val ORIGINAL_SAFE_MIME = setOf("image/jpeg", "image/png")
     }
 }
 
@@ -223,7 +226,8 @@ class ImmichClient {
                         id = id,
                         fileName = o.optString("originalFileName", ""),
                         width = o.optInt("width", 0),
-                        height = o.optInt("height", 0)
+                        height = o.optInt("height", 0),
+                        mimeType = o.optString("originalMimeType", "")
                     )
                 )
             }
@@ -260,7 +264,9 @@ class ImmichClient {
         return try {
             val albums = fetchAlbums(baseUrl, apiKey, trustSsl)
             var message = "Connected: ${albums.size} album(s)"
-            downloadPermissionWarning(baseUrl, apiKey, trustSsl)?.let { message += " — $it" }
+            if (PreferencesManager.quality != PreferencesManager.QUALITY_PREVIEW) {
+                downloadPermissionWarning(baseUrl, apiKey, trustSsl)?.let { message += " — $it" }
+            }
             TestResult(true, message, albums)
         } catch (e: ImmichException) {
             TestResult(false, e.message ?: "Connection failed", emptyList())

@@ -26,8 +26,9 @@
     <string name="setting_trust_ssl_desc">Only enable for a server you control</string>
     <string name="setting_landscape_only">Landscape photos only</string>
     <string name="setting_landscape_only_desc">Skip portrait photos (they can break Projectivy\'s UI on some TVs)</string>
-    <string name="setting_full_resolution">Full-resolution photos</string>
-    <string name="setting_full_resolution_desc">Original files instead of ~1440 px previews — quality is paid for in device storage: Projectivy caches every wallpaper locally</string>
+    <string name="quality_preview">Preview (max compatibility)</string>
+    <string name="quality_full_jpeg_png">Full resolution — JPEG/PNG only</string>
+    <string name="quality_full_all">Full resolution — all formats</string>
     <string name="http_warning_title">Unencrypted connection</string>
     <string name="http_warning_message">This server URL uses HTTP (unencrypted). Your Immich API key will be sent without encryption and could be read by anyone on your network. Continue anyway?</string>
     <string name="http_warning_continue">Continue</string>

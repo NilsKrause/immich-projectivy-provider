@@ -24,8 +24,9 @@ itself — exactly the mechanism the official Projectivy template uses for `IMAG
 1. Projectivy binds to the plugin service and calls `getWallpapers()`.
 2. The plugin queries Immich (`x-api-key` header) to obtain a list of assets
    (chosen albums / favorites / recent / random).
-3. It builds a full-resolution URL for each photo:
-   `https://<server>/api/assets/<id>/original?apiKey=<key>` (RAW files are skipped).
+3. It builds a wallpaper URL for each photo — the ~1440 px preview by default, or the
+   original file in a full-resolution mode:
+   `https://<server>/api/assets/<id>/thumbnail?size=preview&apiKey=<key>` (or `/original`).
 4. It returns this list of URLs to Projectivy; Projectivy downloads them, stores them in its
    own cache, and rotates them on its own interval, until the list expires after
    `itemsCacheDurationMillis`.
@@ -90,15 +91,15 @@ Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immi
 | **Seconds per image** | see below — **advisory only** |
 | **Trust self-signed certificates** | enable only if your server uses a self-signed certificate |
 | **Landscape photos only** | skip portrait photos (they can break Projectivy's UI on some TVs); default: on |
-| **Full-resolution photos** | serve original files instead of ~1440 px previews (default off). Quality is paid for in device storage: Projectivy caches every wallpaper locally |
+| **Photo quality** | Preview (max compatibility, default) / Full resolution — JPEG/PNG only / Full resolution — all formats. Originals are paid for in device storage: Projectivy caches every wallpaper locally |
 
 > **Storage note**: the plugin downloads nothing — Projectivy does, into its own image
 > cache. The wallpaper *list* is kept for `itemsCacheDurationMillis` (30 min here), and the
 > downloaded files are evicted by **cache size, not by refresh** (capped at ~50 MB since
 > Projectivy 4.72; before that the cache could grow unbounded). Original photos from phone
 > cameras are 3–10 MB each, so 20 images won't fit in 50 MB: Projectivy then re-downloads
-> between rotations. Prefer **Images to cache ≈ 5–10** when *Full-resolution photos* is on,
-> or turn it off if storage churn matters more than sharpness.
+> between rotations. Prefer **Images to cache ≈ 5–10** in a full-resolution mode,
+> or stay on Preview if storage churn matters more than sharpness.
 
 > **Self-signed certificate note**: *Trust self-signed certificates* affects the **plugin's**
 > HTTP client (listing albums, test connection, asset search). The actual wallpaper download is
@@ -126,8 +127,8 @@ effect if aligned with Projectivy's setting.
 - `GET  /api/albums` — album list
 - `POST /api/search/metadata` — asset search (recent, favorites, album; `filter` + `orderBy` + `size`)
 - `POST /api/search/random` — random assets
-- `GET  /api/assets/{id}/original?apiKey=<key>` — full-resolution original for the wallpaper
-- `GET  /api/assets/{id}/thumbnail?size=preview&apiKey=<key>` — ~1440 px preview (used when full resolution is off)
+- `GET  /api/assets/{id}/original?apiKey=<key>` — original file (full-resolution modes)
+- `GET  /api/assets/{id}/thumbnail?size=preview&apiKey=<key>` — ~1440 px JPEG preview (Preview mode, and fallback for HEIC/RAW)
 
 Authentication: **`x-api-key`** header for the plugin's calls; **`apiKey`** query parameter for the
 wallpaper URLs that Projectivy downloads. Parsing with `org.json` (no extra dependency). HTTP with
@@ -138,7 +139,7 @@ wallpaper URLs that Projectivy downloads. Parsing with `org.json` (no extra depe
 | Error | Likely cause |
 |---|---|
 | `Invalid API key (401)` | wrong or revoked key |
-| `API key lacks permission (403)` | missing one of the `album.read` / `asset.read` / `asset.view` / `asset.download` permissions (`asset.download` is required for full-resolution wallpapers) |
+| `API key lacks permission (403)` | missing one of the `album.read` / `asset.read` / `asset.view` / `asset.download` permissions (`asset.download` is required for full-resolution modes) |
 | `Not found (404)` | wrong server URL |
 | `Cannot reach server` | server off / network / wrong port |
 | SSL handshake failed | self-signed certificate → use `http://` on the local network, or enable *Trust self-signed* (but see note above) |
@@ -206,8 +207,9 @@ il meccanismo che il template ufficiale di Projectivy usa per i wallpaper di tip
 1. Projectivy si collega al servizio del plugin e chiama `getWallpapers()`.
 2. Il plugin interroga Immich (header `x-api-key`) per ottenere un elenco di asset
    (album scelti / preferiti / recenti / casuali).
-3. Costruisce un URL a piena risoluzione per ogni foto:
-   `https://<server>/api/assets/<id>/original?apiKey=<chiave>` (i file RAW vengono saltati).
+3. Costruisce un URL per lo sfondo per ogni foto — l'anteprima ~1440 px di default, o il
+   file originale in una modalità a piena risoluzione:
+   `https://<server>/api/assets/<id>/thumbnail?size=preview&apiKey=<chiave>` (o `/original`).
 4. Restituisce a Projectivy la lista di questi URL; Projectivy li scarica, li mette nella sua
    cache e li ruota col **suo** intervallo, finché la lista scade dopo `itemsCacheDurationMillis`.
 
@@ -271,15 +273,15 @@ Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immi
 | **Seconds per image** | vedi sotto — **solo indicativo** |
 | **Trust self-signed certificates** | abilita solo se il tuo server usa un certificato autofirmato |
 | **Landscape photos only** | salta le foto verticali (possono rompere la UI di Projectivy su alcune TV); default: attivo |
-| **Foto a piena risoluzione** | usa i file originali invece delle anteprime (~1440 px); default: disattivo. La qualità si paga in spazio di archiviazione: Projectivy mette in cache ogni sfondo sul dispositivo |
+| **Qualità foto** | Preview (massima compatibilità, default) / Full resolution — solo JPEG/PNG / Full resolution — tutti i formati. Gli originali si pagano in spazio di archiviazione: Projectivy mette in cache ogni sfondo sul dispositivo |
 
 > **Nota di spazio**: il plugin non scarica nulla — scarica Projectivy, nella **sua** cache
 > immagini. La *lista* di sfondi resta per `itemsCacheDurationMillis` (qui 30 min), mentre i
 > file scaricati vengono espulsi per **dimensione cache, non a ogni refresh** (limite ~50 MB
 > da Projectivy 4.72; prima la cache poteva crescere senza limite). Le foto originali delle
 > fotocamere via telefono pesano 3–10 MB ciascuna: 20 immagini non entrano in 50 MB e
-> Projectivy le ri-scaricherà tra una rotazione e l'altra. Con *Foto a piena risoluzione*
-> attivo conviene tenere **Immagini da mettere in cache ≈ 5–10**, oppure disattivarla se lo
+> Projectivy le ri-scaricherà tra una rotazione e l'altra. In una modalità a piena risoluzione
+> conviene tenere **Immagini da mettere in cache ≈ 5–10**, oppure restare su Preview se lo
 > spazio conta più della nitidezza.
 
 > **Nota sul certificato autofirmato**: la voce *Trust self-signed certificates* agisce sul
@@ -309,8 +311,8 @@ se allineato all'impostazione di Projectivy.
 - `GET  /api/albums` — elenco album
 - `POST /api/search/metadata` — ricerca asset (recenti, preferiti, album; filtro `filter` + `orderBy` + `size`)
 - `POST /api/search/random` — asset casuali
-- `GET  /api/assets/{id}/original?apiKey=<chiave>` — originale a piena risoluzione per lo sfondo
-- `GET  /api/assets/{id}/thumbnail?size=preview&apiKey=<chiave>` — anteprima ~1440 px (usata quando la piena risoluzione è disattivata)
+- `GET  /api/assets/{id}/original?apiKey=<chiave>` — file originale (modalità a piena risoluzione)
+- `GET  /api/assets/{id}/thumbnail?size=preview&apiKey=<chiave>` — anteprima JPEG ~1440 px (modalità Preview, e fallback per HEIC/RAW)
 
 Autenticazione: header **`x-api-key`** per le chiamate del plugin; query parameter **`apiKey`**
 per gli URL dei wallpaper che scarica Projectivy. Parsing con `org.json` (nessuna dipendenza
@@ -322,7 +324,7 @@ l'userspace a 32 bit del Fire TV).
 | Errore | Causa probabile |
 |---|---|
 | `Invalid API key (401)` | chiave errata o revocata |
-| `API key lacks permission (403)` | manca uno dei permessi `album.read` / `asset.read` / `asset.view` / `asset.download` (`asset.download` serve per gli sfondi a piena risoluzione) |
+| `API key lacks permission (403)` | manca uno dei permessi `album.read` / `asset.read` / `asset.view` / `asset.download` (`asset.download` serve per le modalità a piena risoluzione) |
 | `Not found (404)` | URL del server errato |
 | `Cannot reach server` | server spento / rete / porta sbagliata |
 | handshake SSL fallito | certificato autofirmato → usa `http://` in rete locale, o attiva *Trust self-signed* (ma vedi nota sopra) |

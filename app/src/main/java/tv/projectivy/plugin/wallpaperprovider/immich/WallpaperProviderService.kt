@@ -74,17 +74,24 @@ class WallpaperProviderService : Service() {
             emptyList()
         }
 
+        val quality = PreferencesManager.quality
+
         // Portrait wallpapers can make Projectivy mis-render the whole launcher UI on some
-        // TVs, so by default only landscape (or square) photos are returned. RAW files are
-        // always skipped: a TV cannot decode a RAW original.
+        // TVs, so by default only landscape (or square) photos are returned. HEIC/RAW are
+        // handled per-asset below: non-JPEG/PNG originals fall back to the JPEG preview.
         val usable = (if (landscapeOnly) assets.filter { it.isLandscape } else assets)
-            .filter { !it.isRaw }
             .take(requested)
 
         val wallpapers = usable.shuffled().map { asset ->
             Wallpaper(
-                uri = if (PreferencesManager.fullResolution) client.originalUrl(baseUrl, apiKey, asset.id)
-                      else client.thumbnailUrl(baseUrl, apiKey, asset.id),
+                uri = when {
+                    quality == PreferencesManager.QUALITY_FULL_ALL ->
+                        client.originalUrl(baseUrl, apiKey, asset.id)
+                    quality == PreferencesManager.QUALITY_FULL_JPEG_PNG && asset.canServeOriginal ->
+                        client.originalUrl(baseUrl, apiKey, asset.id)
+                    else ->
+                        client.thumbnailUrl(baseUrl, apiKey, asset.id)
+                },
                 type = WallpaperType.IMAGE,
                 displayMode = WallpaperDisplayMode.CROP,
                 title = asset.fileName.takeIf { it.isNotBlank() }

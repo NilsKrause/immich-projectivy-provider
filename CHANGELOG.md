@@ -2,11 +2,13 @@
 
 ## 0.0.4
 
-- Album and Favorites sources now draw a random sample from the server on every refresh (`/api/search/random`) instead of always listing the newest files — multi-album selections rotate across all of them.
-- Fix boolean settings ("Trust self-signed certificates", "Landscape photos only", "Full-resolution photos") not unchecking: a single radio-group action cannot be unchecked, so they now use real checkboxes.
-- Test connection probes a full-resolution download and warns when the API key lacks the `asset.download` permission (required for `/api/assets/{id}/original`; without it Projectivy silently keeps old cached wallpapers).
-- New "Full-resolution photos" toggle (off by default): serves the original asset file (`/api/assets/{id}/original`) instead of Immich's ~1440px preview thumbnail. Quality is paid for in device storage — Projectivy caches every wallpaper locally, so enable it plus a small "Images to cache" value only if storage allows (see README).
-- Skip camera RAW files (Sony `.arw` and other RAW formats): a TV cannot decode a RAW original and their previews are lower quality.
+Thanks to @WildFireFlum (PR #4) for the full-resolution support, the server-side random sampling, the `asset.download` permission check, and the boolean-toggle fix.
+
+- New "Photo quality" selector (3 modes): **Preview (max compatibility, default)**, **Full resolution — JPEG/PNG only**, and **Full resolution — all formats**. HEIC/RAW originals fall back to the JPEG preview unless "all formats" is chosen.
+- Album and Favorites sources now draw a random sample from the server on every refresh (`/api/search/random`) instead of always listing the newest files.
+- Fix boolean settings ("Trust self-signed certificates", "Landscape photos only") not unchecking: they now use real checkboxes instead of single-member radio groups.
+- Test connection warns when the API key lacks the `asset.download` permission (checked only when a full-resolution mode is selected).
+- Non-decodable originals are skipped: in "Full resolution — JPEG/PNG only", only JPEG/PNG are served as originals; everything else (HEIC, RAW, etc.) uses the JPEG preview.
 
 ## 0.0.3
 

@@ -27,12 +27,16 @@ object PreferencesManager {
     private const val KEY_SECONDS = "seconds_per_image"
     private const val KEY_TRUST_SSL = "trust_ssl"
     private const val KEY_LANDSCAPE_ONLY = "landscape_only"
-    private const val KEY_FULL_RESOLUTION = "full_resolution"
+    private const val KEY_QUALITY = "quality"
 
     const val SOURCE_RECENT = "recent"
     const val SOURCE_FAVORITES = "favorites"
     const val SOURCE_RANDOM = "random"
     const val SOURCE_ALBUM = "album"
+
+    const val QUALITY_PREVIEW = "preview"
+    const val QUALITY_FULL_JPEG_PNG = "full_jpeg_png"
+    const val QUALITY_FULL_ALL = "full_all"
 
     const val DEFAULT_IMAGE_COUNT = 20
     const val DEFAULT_SECONDS = 300
@@ -112,13 +116,13 @@ object PreferencesManager {
         set(value) = prefs.edit().putBoolean(KEY_LANDSCAPE_ONLY, value).apply()
 
     /**
-     * When true, wallpaper URLs point at the original asset files. When false (default),
-     * they point at Immich preview thumbnails (~1440 px) which download faster and cache
-     * far smaller on the TV.
+     * Wallpaper quality. One of [QUALITY_PREVIEW] (default, max compatibility),
+     * [QUALITY_FULL_JPEG_PNG] (original only for JPEG/PNG) or [QUALITY_FULL_ALL]
+     * (original for every format).
      */
-    var fullResolution: Boolean
-        get() = prefs.getBoolean(KEY_FULL_RESOLUTION, false)
-        set(value) = prefs.edit().putBoolean(KEY_FULL_RESOLUTION, value).apply()
+    var quality: String
+        get() = prefs.getString(KEY_QUALITY, QUALITY_PREVIEW) ?: QUALITY_PREVIEW
+        set(value) = prefs.edit().putString(KEY_QUALITY, value).apply()
 
     /** True once the minimum required configuration is present. */
     val isConfigured: Boolean
@@ -143,7 +147,7 @@ object PreferencesManager {
         json.put(KEY_SECONDS, secondsPerImage)
         json.put(KEY_TRUST_SSL, trustSsl)
         json.put(KEY_LANDSCAPE_ONLY, landscapeOnly)
-        json.put(KEY_FULL_RESOLUTION, fullResolution)
+        json.put(KEY_QUALITY, quality)
         return json.toString()
     }
 
@@ -179,7 +183,7 @@ object PreferencesManager {
             if (json.has(KEY_SECONDS)) editor.putInt(KEY_SECONDS, intValue(json, KEY_SECONDS, DEFAULT_SECONDS).coerceIn(MIN_SECONDS, MAX_SECONDS))
             if (json.has(KEY_TRUST_SSL)) editor.putBoolean(KEY_TRUST_SSL, boolValue(json, KEY_TRUST_SSL))
             if (json.has(KEY_LANDSCAPE_ONLY)) editor.putBoolean(KEY_LANDSCAPE_ONLY, boolValue(json, KEY_LANDSCAPE_ONLY))
-            if (json.has(KEY_FULL_RESOLUTION)) editor.putBoolean(KEY_FULL_RESOLUTION, boolValue(json, KEY_FULL_RESOLUTION))
+            if (json.has(KEY_QUALITY)) editor.putString(KEY_QUALITY, json.optString(KEY_QUALITY))
             editor.apply()
             true
         } catch (e: Exception) {
