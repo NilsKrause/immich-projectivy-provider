@@ -32,8 +32,26 @@ android {
         buildConfig = true
     }
 
+    // Present only when a keystore is supplied through the environment, so a plain local
+    // `assembleRelease` still works (unsigned) and CI signs when the secrets exist.
+    val releaseKeystore = System.getenv("RELEASE_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
+            if (releaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
