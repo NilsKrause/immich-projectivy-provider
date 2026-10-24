@@ -79,19 +79,37 @@ class SettingsFragment : GuidedStepSupportFragment() {
                 .id(ACTION_TRUST_SSL)
                 .title(getString(R.string.setting_trust_ssl))
                 .description(getString(R.string.setting_trust_ssl_desc))
-                .checkSetId(CHECKSET_SSL)
+                .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
                 .checked(PreferencesManager.trustSsl)
                 .build()
         )
+
+        // Landscape photos only (checkbox)
+        actions.add(
+            GuidedAction.Builder(requireContext())
+                .id(ACTION_LANDSCAPE_ONLY)
+                .title(getString(R.string.setting_landscape_only))
+                .description(getString(R.string.setting_landscape_only_desc))
+                .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
+                .checked(PreferencesManager.landscapeOnly)
+                .build()
+        )
+
+        // Photo quality (radio group)
+        actions.add(qualityAction(ACTION_QUALITY_PREVIEW, R.string.quality_preview, PreferencesManager.QUALITY_PREVIEW))
+        actions.add(qualityAction(ACTION_QUALITY_FULL_JPEG_PNG, R.string.quality_full_jpeg_png, PreferencesManager.QUALITY_FULL_JPEG_PNG))
+        actions.add(qualityAction(ACTION_QUALITY_FULL_ALL, R.string.quality_full_all, PreferencesManager.QUALITY_FULL_ALL))
     }
 
     override fun onGuidedActionClicked(action: GuidedAction) {
         when (action.id) {
             ACTION_SERVER_URL -> {
                 val value = action.editDescription?.toString()?.trim() ?: ""
-                PreferencesManager.serverUrl = value
-                action.description = value.ifBlank { getString(R.string.setting_server_url_desc) }
-                refresh(ACTION_SERVER_URL)
+                if (value.startsWith("http://", ignoreCase = true)) {
+                    HttpWarningFragment.show(requireFragmentManager(), value)
+                } else {
+                    saveServerUrl(value)
+                }
             }
             ACTION_API_KEY -> {
                 val value = action.editDescription?.toString()?.trim() ?: ""
@@ -120,6 +138,14 @@ class SettingsFragment : GuidedStepSupportFragment() {
                 refresh(ACTION_SECONDS)
             }
             ACTION_TRUST_SSL -> PreferencesManager.trustSsl = action.isChecked
+            ACTION_LANDSCAPE_ONLY -> PreferencesManager.landscapeOnly = action.isChecked
+            ACTION_QUALITY_PREVIEW, ACTION_QUALITY_FULL_JPEG_PNG, ACTION_QUALITY_FULL_ALL -> {
+                PreferencesManager.quality = when {
+                    isChecked(ACTION_QUALITY_FULL_JPEG_PNG) -> PreferencesManager.QUALITY_FULL_JPEG_PNG
+                    isChecked(ACTION_QUALITY_FULL_ALL) -> PreferencesManager.QUALITY_FULL_ALL
+                    else -> PreferencesManager.QUALITY_PREVIEW
+                }
+            }
         }
     }
 
@@ -128,6 +154,14 @@ class SettingsFragment : GuidedStepSupportFragment() {
         // Reflect an album picked in the sub-step.
         findActionById(ACTION_CHOOSE_ALBUM)?.description = currentAlbumDescription()
         refresh(ACTION_CHOOSE_ALBUM)
+
+        // Reflect a server URL accepted (or cleared) in the HTTP warning sub-step.
+        val saved = PreferencesManager.serverUrl
+        findActionById(ACTION_SERVER_URL)?.let {
+            it.editDescription = saved
+            it.description = saved.ifBlank { getString(R.string.setting_server_url_desc) }
+            refresh(ACTION_SERVER_URL)
+        }
     }
 
     // --- helpers -------------------------------------------------------------
@@ -138,6 +172,15 @@ class SettingsFragment : GuidedStepSupportFragment() {
             .title(getString(titleRes))
             .checkSetId(CHECKSET_SOURCE)
             .checked(PreferencesManager.source == sourceValue)
+            .build()
+    }
+
+    private fun qualityAction(id: Long, titleRes: Int, value: String): GuidedAction {
+        return GuidedAction.Builder(requireContext())
+            .id(id)
+            .title(getString(titleRes))
+            .checkSetId(CHECKSET_QUALITY)
+            .checked(PreferencesManager.quality == value)
             .build()
     }
 
@@ -153,6 +196,14 @@ class SettingsFragment : GuidedStepSupportFragment() {
 
     private fun currentAlbumDescription(): String =
         PreferencesManager.albumName.ifBlank { "(none)" }
+
+    private fun saveServerUrl(value: String) {
+        PreferencesManager.serverUrl = value
+        findActionById(ACTION_SERVER_URL)?.let {
+            it.description = value.ifBlank { getString(R.string.setting_server_url_desc) }
+            refresh(ACTION_SERVER_URL)
+        }
+    }
 
     private fun isChecked(id: Long): Boolean =
         findActionById(id)?.isChecked == true
@@ -205,8 +256,12 @@ class SettingsFragment : GuidedStepSupportFragment() {
         private const val ACTION_IMAGE_COUNT = 20L
         private const val ACTION_SECONDS = 21L
         private const val ACTION_TRUST_SSL = 30L
+        private const val ACTION_LANDSCAPE_ONLY = 31L
+        private const val ACTION_QUALITY_PREVIEW = 40L
+        private const val ACTION_QUALITY_FULL_JPEG_PNG = 41L
+        private const val ACTION_QUALITY_FULL_ALL = 42L
 
         private const val CHECKSET_SOURCE = 1
-        private const val CHECKSET_SSL = 2
+        private const val CHECKSET_QUALITY = 4
     }
 }

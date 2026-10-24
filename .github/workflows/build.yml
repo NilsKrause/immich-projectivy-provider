@@ -33,6 +33,12 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^versionName = "\([^"]*\)"/\1/p' gradle/libs.versions.toml)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       # A release keystore is used when the repo provides one, so published APKs are not
       # debuggable and keep a stable signing identity across builds. Without the secrets
       # the job still works and falls back to the debug build, so merging this does not
@@ -66,22 +72,23 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
         run: gradle :app:assembleDebug --no-daemon
 
-      - name: Copy APK to stable name
+      - name: Copy APK to versioned name
         run: |
+          APK="immich-provider-${{ steps.version.outputs.version }}.apk"
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk immich-provider.apk
+            cp app/build/outputs/apk/release/app-release.apk "$APK"
           else
-            cp app/build/outputs/apk/debug/app-debug.apk immich-provider.apk
+            cp app/build/outputs/apk/debug/app-debug.apk "$APK"
           fi
-          sha256sum immich-provider.apk | tee immich-provider.apk.sha256
+          sha256sum "$APK" | tee "$APK.sha256"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: immich-provider-apk
           path: |
-            immich-provider.apk
-            immich-provider.apk.sha256
+            immich-provider-${{ steps.version.outputs.version }}.apk
+            immich-provider-${{ steps.version.outputs.version }}.apk.sha256
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -89,6 +96,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
+          APK="immich-provider-${{ steps.version.outputs.version }}.apk"
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             TAG="$GITHUB_REF_NAME"
           else
@@ -96,7 +104,7 @@ jobs:
           fi
           # Idempotent: remove any previous release/tag under this name, then recreate.
           gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "$TAG" immich-provider.apk immich-provider.apk.sha256 \
-            --title "Immich Provider build ($TAG)" \
-            --notes "Automated build from commit ${GITHUB_SHA} on ref ${GITHUB_REF}. SHA256 of the APK is published alongside it." \
+          gh release create "$TAG" "$APK" "$APK.sha256" \
+            --title "Immich Provider ${{ steps.version.outputs.version }} ($TAG)" \
+            --notes-file CHANGELOG.md \
             --target "$GITHUB_SHA"

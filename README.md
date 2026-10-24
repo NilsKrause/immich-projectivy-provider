@@ -22,9 +22,10 @@ reverse proxy sitting in front of Immich.
 
 1. Projectivy binds to the plugin service and calls `getWallpapers()`.
 2. The plugin queries Immich (`x-api-key` header) to obtain a list of assets
-   (chosen album / favorites / recent / random).
-3. It downloads the **`preview`** size of each photo (not the multi-MB original) into the app's
-   private cache, authenticating with the `x-api-key` header.
+   (chosen albums / favorites / recent / random).
+3. It downloads each photo into the app's private cache, authenticating with the
+   `x-api-key` header: the ~1440 px preview by default, or the original file in a
+   full-resolution mode (HEIC/RAW fall back to the preview unless "all formats" is chosen).
 4. It returns a list of `content://` URIs served by a **non-exported** `ContentProvider`, granting
    read access on each one to Projectivy's package alone. Projectivy rotates them on its own
    interval, until the list expires after `itemsCacheDurationMillis`.
@@ -71,13 +72,13 @@ makes keeping the key in-process worth the extra code. The plugin needs exactly 
 Build with GitHub Actions (see below) or download the APK from the release:
 
 ```
-https://github.com/<YOUR-USER>/<YOUR-REPO>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<YOUR-USER>/<YOUR-REPO>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 Install on the Fire TV:
 
 ```
-adb install -r immich-provider-debug.apk
+adb install -r immich-provider-<version>.apk
 ```
 
 Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immich Wallpaper Provider → Settings**.
@@ -90,10 +91,20 @@ Then, in Projectivy: **Settings → Appearance → Wallpaper → Plugin → Immi
 | **API key** | masked on screen (`••••abcd`); editable |
 | **Test connection** | verifies URL + key; lists the album count and loads the album list |
 | **Source** | Recent / Favorites / Random / Album |
-| **Choose album** | opens the album list (requires *Test connection* or a valid connection) |
+| **Choose albums** | opens the album list and lets you select one or more albums (requires *Test connection* or a valid connection) |
 | **Images to cache** | how many photos to return to Projectivy on each refresh (default 20) |
 | **Seconds per image** | see below — **advisory only** |
 | **Trust self-signed certificates** | enable only if your server uses a self-signed certificate |
+| **Landscape photos only** | skip portrait photos (they can break Projectivy's UI on some TVs); default: on |
+| **Photo quality** | Preview (max compatibility, default) / Full resolution — JPEG/PNG only / Full resolution — all formats. Originals are paid for in device storage: Projectivy caches every wallpaper locally |
+
+> **Storage note**: the plugin downloads nothing — Projectivy does, into its own image
+> cache. The wallpaper *list* is kept for `itemsCacheDurationMillis` (30 min here), and the
+> downloaded files are evicted by **cache size, not by refresh** (capped at ~50 MB since
+> Projectivy 4.72; before that the cache could grow unbounded). Original photos from phone
+> cameras are 3–10 MB each, so 20 images won't fit in 50 MB: Projectivy then re-downloads
+> between rotations. Prefer **Images to cache ≈ 5–10** in a full-resolution mode,
+> or stay on Preview if storage churn matters more than sharpness.
 
 > **Self-signed certificate note**: *Trust self-signed certificates* covers **every** request,
 > including the wallpaper downloads, because the plugin makes all of them. (This was not true while
@@ -122,7 +133,8 @@ effect if aligned with Projectivy's setting.
 - `GET  /api/albums` — album list
 - `POST /api/search/metadata` — asset search (recent, favorites, album; `filter` + `orderBy` + `size`)
 - `POST /api/search/random` — random assets
-- `GET  /api/assets/{id}/thumbnail?size=preview` — preview (JPEG) for the wallpaper
+- `GET  /api/assets/{id}/original` — original file (full-resolution modes)
+- `GET  /api/assets/{id}/thumbnail?size=preview` — ~1440 px JPEG preview (Preview mode, and fallback for HEIC/RAW)
 
 Authentication: the **`x-api-key`** header on all four, since the plugin makes every request
 itself. Parsing with `org.json` (no extra dependency). HTTP with
@@ -133,7 +145,7 @@ itself. Parsing with `org.json` (no extra dependency). HTTP with
 | Error | Likely cause |
 |---|---|
 | `Invalid API key (401)` | wrong or revoked key |
-| `API key lacks permission (403)` | missing one of the `album.read` / `asset.read` / `asset.view` permissions |
+| `API key lacks permission (403)` | missing one of the `album.read` / `asset.read` / `asset.view` / `asset.download` permissions (`asset.download` is required for full-resolution modes) |
 | `Not found (404)` | wrong server URL |
 | `Cannot reach server` | server off / network / wrong port |
 | SSL handshake failed | self-signed certificate → enable *Trust self-signed*; it covers the wallpaper downloads too. `http://` is blocked by platform default (see note above) |
@@ -152,7 +164,7 @@ On every push to the main branch it creates/updates a **`latest`** release; on a
 a release named after the tag. The direct link is therefore:
 
 ```
-https://github.com/<user>/<repo>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<user>/<repo>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 ### Locally
@@ -165,6 +177,9 @@ You need JDK 17 + Android SDK (platform 35). Then:
 
 ## Known notes and limitations
 
+- **Portrait wallpapers**: on some TVs a non-landscape wallpaper makes Projectivy mis-render its
+  whole UI (garbled clock, icon trails). The plugin therefore returns landscape/square photos only
+  by default ("Landscape photos only"); you can disable it in the settings.
 - **`itemsCacheDurationMillis` = 30 min**: static (from the manifest), not changeable at runtime.
   With this value Projectivy reuses the same photo list for 30 minutes before requesting it again
   from the plugin.
@@ -197,9 +212,10 @@ degli accessi di un eventuale reverse proxy davanti a Immich.
 
 1. Projectivy si collega al servizio del plugin e chiama `getWallpapers()`.
 2. Il plugin interroga Immich (header `x-api-key`) per ottenere un elenco di asset
-   (album scelto / preferiti / recenti / casuali).
-3. Scarica la versione **`preview`** di ogni foto (non l'originale da molti MB) nella cache
-   privata dell'app, autenticandosi con l'header `x-api-key`.
+   (album scelti / preferiti / recenti / casuali).
+3. Scarica ogni foto nella cache privata dell'app, autenticandosi con l'header `x-api-key`:
+   l'anteprima ~1440 px di default, o il file originale in una modalità a piena risoluzione
+   (HEIC/RAW ricadono sull'anteprima a meno che non sia scelta "tutti i formati").
 4. Restituisce una lista di URI `content://` serviti da un `ContentProvider` **non esportato**,
    concedendo il permesso di lettura su ciascuno al solo package di Projectivy. Projectivy li ruota
    col **suo** intervallo, finché la lista scade dopo `itemsCacheDurationMillis`.
@@ -247,13 +263,13 @@ esattamente tre permessi: `album.read`, `asset.read`, `asset.view`.
 Compila con GitHub Actions (vedi sotto) oppure scarica l'APK dalla release:
 
 ```
-https://github.com/<TUO-UTENTE>/<TUO-REPO>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<TUO-UTENTE>/<TUO-REPO>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 Installa sul Fire TV:
 
 ```
-adb install -r immich-provider-debug.apk
+adb install -r immich-provider-<version>.apk
 ```
 
 Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immich Wallpaper Provider → Impostazioni**.
@@ -266,10 +282,21 @@ Poi, in Projectivy: **Impostazioni → Aspetto → Wallpaper → Plugin → Immi
 | **API key** | mascherata a schermo (`••••abcd`); modificabile |
 | **Test connection** | verifica URL + chiave; elenca il numero di album e carica l'elenco album |
 | **Sorgente** | Recenti / Preferiti / Casuali / Album |
-| **Choose album** | apre l'elenco album (richiede *Test connection* o una connessione valida) |
+| **Choose albums** | apre l'elenco album e ti fa selezionare uno o più album (richiede *Test connection* o una connessione valida) |
 | **Images to cache** | quante foto restituire a Projectivy a ogni refresh (default 20) |
 | **Seconds per image** | vedi sotto — **solo indicativo** |
 | **Trust self-signed certificates** | abilita solo se il tuo server usa un certificato autofirmato |
+| **Landscape photos only** | salta le foto verticali (possono rompere la UI di Projectivy su alcune TV); default: attivo |
+| **Qualità foto** | Preview (massima compatibilità, default) / Full resolution — solo JPEG/PNG / Full resolution — tutti i formati. Gli originali si pagano in spazio di archiviazione: Projectivy mette in cache ogni sfondo sul dispositivo |
+
+> **Nota di spazio**: il plugin non scarica nulla — scarica Projectivy, nella **sua** cache
+> immagini. La *lista* di sfondi resta per `itemsCacheDurationMillis` (qui 30 min), mentre i
+> file scaricati vengono espulsi per **dimensione cache, non a ogni refresh** (limite ~50 MB
+> da Projectivy 4.72; prima la cache poteva crescere senza limite). Le foto originali delle
+> fotocamere via telefono pesano 3–10 MB ciascuna: 20 immagini non entrano in 50 MB e
+> Projectivy le ri-scaricherà tra una rotazione e l'altra. In una modalità a piena risoluzione
+> conviene tenere **Immagini da mettere in cache ≈ 5–10**, oppure restare su Preview se lo
+> spazio conta più della nitidezza.
 
 > **Nota sul certificato autofirmato**: la voce *Trust self-signed certificates* agisce sul
 > client HTTP **del plugin**, e quindi su **tutte** le richieste, download dei wallpaper
@@ -301,7 +328,8 @@ se allineato all'impostazione di Projectivy.
 - `GET  /api/albums` — elenco album
 - `POST /api/search/metadata` — ricerca asset (recenti, preferiti, album; filtro `filter` + `orderBy` + `size`)
 - `POST /api/search/random` — asset casuali
-- `GET  /api/assets/{id}/thumbnail?size=preview` — anteprima (JPEG) per lo sfondo
+- `GET  /api/assets/{id}/original` — file originale (modalità a piena risoluzione)
+- `GET  /api/assets/{id}/thumbnail?size=preview` — anteprima JPEG ~1440 px (modalità Preview, e fallback per HEIC/RAW)
 
 Autenticazione: header **`x-api-key`** su tutte e quattro, dato che ogni richiesta la fa il
 plugin stesso. Parsing con `org.json` (nessuna dipendenza
@@ -313,7 +341,7 @@ l'userspace a 32 bit del Fire TV).
 | Errore | Causa probabile |
 |---|---|
 | `Invalid API key (401)` | chiave errata o revocata |
-| `API key lacks permission (403)` | manca uno dei permessi `album.read` / `asset.read` / `asset.view` |
+| `API key lacks permission (403)` | manca uno dei permessi `album.read` / `asset.read` / `asset.view` / `asset.download` (`asset.download` serve per le modalità a piena risoluzione) |
 | `Not found (404)` | URL del server errato |
 | `Cannot reach server` | server spento / rete / porta sbagliata |
 | handshake SSL fallito | certificato autofirmato → attiva *Trust self-signed*; copre anche il download dei wallpaper. `http://` è bloccato per default dalla piattaforma (vedi nota sopra) |
@@ -332,7 +360,7 @@ Su ogni push al ramo principale crea/aggiorna una release **`latest`**; su un ta
 una release col nome del tag. Il link diretto è quindi:
 
 ```
-https://github.com/<utente>/<repo>/releases/latest/download/immich-provider-debug.apk
+https://github.com/<utente>/<repo>/releases/latest/download/immich-provider-<version>.apk
 ```
 
 ### In locale
@@ -345,6 +373,9 @@ Serve JDK 17 + Android SDK (platform 35). Poi:
 
 ## Note e limiti noti
 
+- **Wallpaper verticali**: su alcune TV un wallpaper non orizzontale fa disegnare male l'intera UI
+  di Projectivy (orologio sfasato, scie sulle icone). Per questo il plugin restituisce di default
+  solo foto orizzontali/quadrate ("Landscape photos only"); puoi disattivarlo nelle impostazioni.
 - **`itemsCacheDurationMillis` = 30 min**: statico (dal manifest), non modificabile a runtime.
   Con questo valore Projectivy riusa la stessa lista di foto per 30 minuti prima di chiederla
   di nuovo al plugin.

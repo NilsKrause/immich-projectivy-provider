@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.PreferenceManager
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -20,15 +21,22 @@ object PreferencesManager {
     private const val KEY_API_KEY = "api_key"
     private const val KEY_SOURCE = "source"
     private const val KEY_ALBUM_ID = "album_id"
+    private const val KEY_ALBUM_IDS = "album_ids"
     private const val KEY_ALBUM_NAME = "album_name"
     private const val KEY_IMAGE_COUNT = "image_count"
     private const val KEY_SECONDS = "seconds_per_image"
     private const val KEY_TRUST_SSL = "trust_ssl"
+    private const val KEY_LANDSCAPE_ONLY = "landscape_only"
+    private const val KEY_QUALITY = "quality"
 
     const val SOURCE_RECENT = "recent"
     const val SOURCE_FAVORITES = "favorites"
     const val SOURCE_RANDOM = "random"
     const val SOURCE_ALBUM = "album"
+
+    const val QUALITY_PREVIEW = "preview"
+    const val QUALITY_FULL_JPEG_PNG = "full_jpeg_png"
+    const val QUALITY_FULL_ALL = "full_all"
 
     const val DEFAULT_IMAGE_COUNT = 20
     const val DEFAULT_SECONDS = 300
@@ -39,6 +47,16 @@ object PreferencesManager {
 
     fun init(context: Context) {
         prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        migrateLegacyAlbum()
+    }
+
+    /** One-time migration from the legacy single-album field to the multi-album field. */
+    private fun migrateLegacyAlbum() {
+        if (prefs.contains(KEY_ALBUM_IDS)) return
+        val legacy = prefs.getString(KEY_ALBUM_ID, "").orEmpty()
+        if (legacy.isNotBlank()) {
+            prefs.edit().putString(KEY_ALBUM_IDS, JSONArray(listOf(legacy)).toString()).apply()
+        }
     }
 
     var serverUrl: String
@@ -53,9 +71,25 @@ object PreferencesManager {
         get() = prefs.getString(KEY_SOURCE, SOURCE_RECENT) ?: SOURCE_RECENT
         set(value) = prefs.edit().putString(KEY_SOURCE, value).apply()
 
+    /** Legacy single-album id; kept in sync with [albumIds] for downgrade-compatible exports. */
     var albumId: String
         get() = prefs.getString(KEY_ALBUM_ID, "") ?: ""
         set(value) = prefs.edit().putString(KEY_ALBUM_ID, value).apply()
+
+    /**
+     * Selected album ids. The legacy single-album value is migrated in [init] so this
+     * getter is a pure read.
+     */
+    var albumIds: List<String>
+        get() {
+            val raw = prefs.getString(KEY_ALBUM_IDS, null)
+            return if (raw != null) parseIds(raw) else emptyList()
+        }
+        set(value) {
+            val ids = value.distinct()
+            prefs.edit().putString(KEY_ALBUM_IDS, JSONArray(ids).toString()).apply()
+            albumId = ids.firstOrNull() ?: ""
+        }
 
     var albumName: String
         get() = prefs.getString(KEY_ALBUM_NAME, "") ?: ""
@@ -73,6 +107,23 @@ object PreferencesManager {
         get() = prefs.getBoolean(KEY_TRUST_SSL, false)
         set(value) = prefs.edit().putBoolean(KEY_TRUST_SSL, value).apply()
 
+    /**
+     * When true (default), only non-portrait photos are returned. Portrait wallpapers make
+     * Projectivy mis-render its UI around the wallpaper on some TVs.
+     */
+    var landscapeOnly: Boolean
+        get() = prefs.getBoolean(KEY_LANDSCAPE_ONLY, true)
+        set(value) = prefs.edit().putBoolean(KEY_LANDSCAPE_ONLY, value).apply()
+
+    /**
+     * Wallpaper quality. One of [QUALITY_PREVIEW] (default, max compatibility),
+     * [QUALITY_FULL_JPEG_PNG] (original only for JPEG/PNG) or [QUALITY_FULL_ALL]
+     * (original for every format).
+     */
+    var quality: String
+        get() = prefs.getString(KEY_QUALITY, QUALITY_PREVIEW) ?: QUALITY_PREVIEW
+        set(value) = prefs.edit().putString(KEY_QUALITY, value).apply()
+
     /** True once the minimum required configuration is present. */
     val isConfigured: Boolean
         get() = serverUrl.isNotBlank() && apiKey.isNotBlank()
@@ -89,11 +140,14 @@ object PreferencesManager {
         json.put(KEY_SERVER_URL, serverUrl)
         json.put(KEY_API_KEY, apiKey)
         json.put(KEY_SOURCE, source)
+        json.put(KEY_ALBUM_IDS, JSONArray(albumIds))
         json.put(KEY_ALBUM_ID, albumId)
         json.put(KEY_ALBUM_NAME, albumName)
         json.put(KEY_IMAGE_COUNT, imageCount)
         json.put(KEY_SECONDS, secondsPerImage)
         json.put(KEY_TRUST_SSL, trustSsl)
+        json.put(KEY_LANDSCAPE_ONLY, landscapeOnly)
+        json.put(KEY_QUALITY, quality)
         return json.toString()
     }
 
@@ -116,11 +170,20 @@ object PreferencesManager {
             if (json.has(KEY_SERVER_URL)) editor.putString(KEY_SERVER_URL, json.optString(KEY_SERVER_URL).trim())
             if (json.has(KEY_API_KEY)) editor.putString(KEY_API_KEY, json.optString(KEY_API_KEY).trim())
             if (json.has(KEY_SOURCE)) editor.putString(KEY_SOURCE, json.optString(KEY_SOURCE))
+            if (json.has(KEY_ALBUM_IDS)) {
+                val arr = json.optJSONArray(KEY_ALBUM_IDS)
+                val ids = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optString(it) }.distinct().filter { it.isNotBlank() }
+                editor.putString(KEY_ALBUM_IDS, JSONArray(ids).toString())
+            } else if (json.has(KEY_ALBUM_ID) && json.optString(KEY_ALBUM_ID).isNotBlank()) {
+                editor.putString(KEY_ALBUM_IDS, JSONArray(listOf(json.optString(KEY_ALBUM_ID))).toString())
+            }
             if (json.has(KEY_ALBUM_ID)) editor.putString(KEY_ALBUM_ID, json.optString(KEY_ALBUM_ID))
             if (json.has(KEY_ALBUM_NAME)) editor.putString(KEY_ALBUM_NAME, json.optString(KEY_ALBUM_NAME))
             if (json.has(KEY_IMAGE_COUNT)) editor.putInt(KEY_IMAGE_COUNT, intValue(json, KEY_IMAGE_COUNT, DEFAULT_IMAGE_COUNT).coerceIn(1, 100))
             if (json.has(KEY_SECONDS)) editor.putInt(KEY_SECONDS, intValue(json, KEY_SECONDS, DEFAULT_SECONDS).coerceIn(MIN_SECONDS, MAX_SECONDS))
             if (json.has(KEY_TRUST_SSL)) editor.putBoolean(KEY_TRUST_SSL, boolValue(json, KEY_TRUST_SSL))
+            if (json.has(KEY_LANDSCAPE_ONLY)) editor.putBoolean(KEY_LANDSCAPE_ONLY, boolValue(json, KEY_LANDSCAPE_ONLY))
+            if (json.has(KEY_QUALITY)) editor.putString(KEY_QUALITY, json.optString(KEY_QUALITY))
             editor.apply()
             true
         } catch (e: Exception) {
@@ -140,6 +203,13 @@ object PreferencesManager {
         is Boolean -> v
         is String -> v.trim().equals("true", ignoreCase = true)
         else -> false
+    }
+
+    private fun parseIds(raw: String): List<String> = try {
+        val arr = JSONArray(raw)
+        (0 until arr.length()).mapNotNull { arr.optString(it) }.filter { it.isNotBlank() }
+    } catch (e: Exception) {
+        emptyList()
     }
 
     private const val TAG = "ImmichPrefs"

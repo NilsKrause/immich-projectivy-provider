@@ -17,7 +17,8 @@ import tv.projectivy.plugin.wallpaperprovider.api.WallpaperType
  * [getWallpapers] to obtain the list of wallpapers to rotate.
  *
  * Immich image URLs require the `x-api-key` header, which Projectivy cannot send when it
- * downloads a wallpaper by URL. So this service downloads the previews itself and returns
+ * downloads a wallpaper by URL. So this service downloads the images itself (preview or
+ * full-resolution original, depending on the quality setting) and returns
  * `content://` URIs backed by [WallpaperImageProvider], granting read access per URI to
  * Projectivy alone. The Immich API key never leaves this process.
  */
@@ -86,11 +87,16 @@ class WallpaperProviderService : Service() {
         val baseUrl = client.normalizeBaseUrl(PreferencesManager.serverUrl)
         val apiKey = PreferencesManager.apiKey
         val trustSsl = PreferencesManager.trustSsl
+        val requested = PreferencesManager.imageCount
+        val landscapeOnly = PreferencesManager.landscapeOnly
+
+        // Fetch extra when filtering so we can still fill the requested count.
+        val fetchCount = if (landscapeOnly) minOf(requested * 3, 200) else requested
 
         val assets = try {
             client.fetchAssets(
                 baseUrl, apiKey, trustSsl,
-                PreferencesManager.source, PreferencesManager.albumId, PreferencesManager.imageCount
+                PreferencesManager.source, PreferencesManager.albumIds, fetchCount
             )
         } catch (e: ImmichException) {
             Log.w(TAG, "fetchAssets failed (HTTP ${e.httpCode}): ${e.message}")
@@ -100,27 +106,40 @@ class WallpaperProviderService : Service() {
             emptyList()
         }
 
+        val quality = PreferencesManager.quality
+
+        // Landscape/square only by default: portrait wallpapers can make Projectivy
+        // mis-render the whole launcher UI on some TVs. HEIC/RAW originals are just as
+        // risky, so QUALITY_FULL_JPEG_PNG keeps the JPEG preview for them.
+        val usable = (if (landscapeOnly) assets.filter { it.isLandscape } else assets)
+            .take(requested)
+
         // Projectivy is blocked in a binder transaction for the duration of this call, so
         // the downloads get a wall-clock budget: a slow or half-dead Immich must not hold
         // the launcher indefinitely. Anything already cached from an earlier pass is still
         // served, so exhausting the budget degrades the rotation rather than emptying it.
         val deadline = System.currentTimeMillis() + DOWNLOAD_BUDGET_MS
         var fetched = 0
-        for (asset in assets) {
+        for (asset in usable) {
             if (System.currentTimeMillis() > deadline) {
                 Log.i(TAG, "Download budget spent after $fetched asset(s); serving the cache")
                 break
             }
-            val file = cache.ensureCached(asset.id) {
-                client.fetchImage(baseUrl, apiKey, trustSsl, asset.id, WallpaperCache.PREVIEW_SIZE)
+            val serveOriginal = quality == PreferencesManager.QUALITY_FULL_ALL ||
+                (quality == PreferencesManager.QUALITY_FULL_JPEG_PNG && asset.canServeOriginal)
+            val file = cache.ensureCached(
+                asset.id,
+                if (serveOriginal) WallpaperCache.ORIGINAL_SIZE else WallpaperCache.PREVIEW_SIZE
+            ) {
+                client.fetchImage(baseUrl, apiKey, trustSsl, asset.id, original = serveOriginal)
             }
             if (file != null) fetched++
         }
         cache.enforceSizeLimit(MAX_CACHE_BYTES)
 
         val titles = assets.associate { it.id to it.fileName }
-        val wallpapers = cache.listCachedAssetIds().shuffled().map { assetId ->
-            val uri = cache.uriFor(assetId)
+        val wallpapers = cache.listCached().shuffled().map { cached ->
+            val uri = cache.uriFor(cached.fileName)
             // Ad-hoc grants do not survive a reboot; re-issuing them on every call is what
             // keeps that self-healing, since Projectivy re-asks once the item cache expires.
             grantUriPermission(PROJECTIVY_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -128,7 +147,7 @@ class WallpaperProviderService : Service() {
                 uri = uri.toString(),
                 type = WallpaperType.IMAGE,
                 displayMode = WallpaperDisplayMode.CROP,
-                title = titles[assetId]?.takeIf { it.isNotBlank() }
+                title = titles[cached.assetId]?.takeIf { it.isNotBlank() }
             )
         }
 

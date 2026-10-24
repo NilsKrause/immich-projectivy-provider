@@ -1,14 +1,15 @@
 package tv.projectivy.plugin.wallpaperprovider.immich
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.widget.GuidanceStylist
 import androidx.leanback.widget.GuidedAction
 
 /**
- * Sub-step that lists the Immich albums and lets the user pick one. Albums are
- * fetched asynchronously (never on the UI thread) and the action list is replaced
- * once they arrive.
+ * Sub-step that lists the Immich albums and lets the user pick any number of them.
+ * Albums are fetched asynchronously (never on the UI thread) and the action list is
+ * replaced once they arrive; the selection is saved through the "Save selection" action.
  */
 class AlbumPickerFragment : GuidedStepSupportFragment() {
 
@@ -64,16 +65,23 @@ class AlbumPickerFragment : GuidedStepSupportFragment() {
 
     private fun buildAlbumActions(fetched: List<ImmichAlbum>): MutableList<GuidedAction> {
         val result = mutableListOf<GuidedAction>()
+        val selected = PreferencesManager.albumIds.toSet()
         for ((i, album) in fetched.withIndex()) {
             result.add(
                 GuidedAction.Builder(requireContext())
                     .id(ACTION_ALBUM_BASE + i)
                     .title(album.name)
-                    .checkSetId(CHECKSET_ALBUM)
-                    .checked(album.id == PreferencesManager.albumId)
+                    .checkSetId(GuidedAction.CHECKBOX_CHECK_SET_ID)
+                    .checked(album.id in selected)
                     .build()
             )
         }
+        result.add(
+            GuidedAction.Builder(requireContext())
+                .id(ACTION_DONE)
+                .title(getString(R.string.album_picker_done))
+                .build()
+        )
         return result
     }
 
@@ -86,10 +94,14 @@ class AlbumPickerFragment : GuidedStepSupportFragment() {
     }
 
     override fun onGuidedActionClicked(action: GuidedAction) {
-        val index = (action.id - ACTION_ALBUM_BASE).toInt()
-        val album = albums.getOrNull(index) ?: return
-        PreferencesManager.albumId = album.id
-        PreferencesManager.albumName = album.name
+        if (action.id != ACTION_DONE) return
+        val chosen = albums.filterIndexed { i, _ -> findActionById(ACTION_ALBUM_BASE + i)?.isChecked == true }
+        if (chosen.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.album_picker_none, Toast.LENGTH_LONG).show()
+            return
+        }
+        PreferencesManager.albumIds = chosen.map { it.id }
+        PreferencesManager.albumName = chosen.joinToString(", ") { it.name }
         requireFragmentManager().popBackStack()
     }
 
@@ -97,6 +109,6 @@ class AlbumPickerFragment : GuidedStepSupportFragment() {
         private const val ACTION_LOADING = 1L
         private const val ACTION_INFO = 2L
         private const val ACTION_ALBUM_BASE = 1000L
-        private const val CHECKSET_ALBUM = 1
+        private const val ACTION_DONE = 3L
     }
 }

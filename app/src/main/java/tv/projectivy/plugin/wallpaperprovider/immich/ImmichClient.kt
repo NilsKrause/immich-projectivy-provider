@@ -15,7 +15,30 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 data class ImmichAlbum(val id: String, val name: String)
-data class ImmichAsset(val id: String, val fileName: String)
+data class ImmichAsset(
+    val id: String,
+    val fileName: String,
+    val width: Int = 0,
+    val height: Int = 0,
+    val mimeType: String = ""
+) {
+    /**
+     * True when the asset is not portrait. Unknown dimensions are treated as usable.
+     * Portrait wallpapers are skipped by default because on some TVs Projectivy mis-renders
+     * the launcher UI around a non-landscape wallpaper.
+     */
+    val isLandscape: Boolean get() = width <= 0 || height <= 0 || width >= height
+
+    /**
+     * True when the original can be served at full resolution and still be decoded by a TV.
+     * HEIC, RAW and other formats fall back to Immich's JPEG preview instead.
+     */
+    val canServeOriginal: Boolean get() = mimeType in ORIGINAL_SAFE_MIME
+
+    companion object {
+        private val ORIGINAL_SAFE_MIME = setOf("image/jpeg", "image/png")
+    }
+}
 
 /** Thrown for any Immich API failure; [message] is safe to show the user. */
 class ImmichException(val httpCode: Int, override val message: String) : Exception(message)
@@ -26,6 +49,9 @@ data class TestResult(
     val albums: List<ImmichAlbum> = emptyList()
 )
 
+/** Downloaded image bytes together with the MIME type Immich reported for them. */
+data class ImmichImage(val bytes: ByteArray, val mimeType: String)
+
 /**
  * Minimal Immich v3 REST client (pure JVM, no native code).
  *
@@ -33,7 +59,8 @@ data class TestResult(
  *   GET  /api/albums                     -> list albums (x-api-key)
  *   POST /api/search/metadata            -> search assets (filter + orderBy + size)
  *   POST /api/search/random              -> random assets (filter + size)
- *   GET  /api/assets/{id}/thumbnail?size=preview -> image bytes (JPEG, x-api-key)
+ *   GET  /api/assets/{id}/original       -> original image bytes (JPEG/PNG/etc., x-api-key)
+ *   GET  /api/assets/{id}/thumbnail?size=preview -> preview bytes (JPEG, ~1440 px, x-api-key)
  *
  * Every request is authenticated with the `x-api-key` header.
  */
@@ -115,7 +142,7 @@ class ImmichClient {
         }
         val base = when (code) {
             401 -> "Invalid API key (401)."
-            403 -> "API key lacks permission (403). It needs album.read, asset.read, asset.view."
+            403 -> "API key lacks permission (403). It needs album.read, asset.read, asset.view, asset.download."
             404 -> "Not found (404). Check the server URL."
             else -> "HTTP $code."
         }
@@ -155,34 +182,38 @@ class ImmichClient {
         return result
     }
 
-    private fun buildSearchBody(source: String, albumId: String, count: Int): String {
+    private fun buildSearchBody(source: String, albumIds: List<String>, count: Int): String {
         val filter = JSONObject()
         filter.put("type", JSONObject().put("eq", "IMAGE"))
         when (source) {
             PreferencesManager.SOURCE_ALBUM ->
-                filter.put("albumIds", JSONObject().put("any", JSONArray().put(albumId)))
+                filter.put("albumIds", JSONObject().put("any", JSONArray(albumIds)))
             PreferencesManager.SOURCE_FAVORITES ->
                 filter.put("isFavorite", JSONObject().put("eq", true))
         }
         val body = JSONObject()
         body.put("filter", filter)
         body.put("size", count)
-        if (source != PreferencesManager.SOURCE_RANDOM) {
+        // Recent means "newest N" by definition; every other source is a random sample
+        // drawn by the server, so each refresh returns a different set of photos. The
+        // ordered search would keep pulling the newest files of whichever album has them.
+        if (source == PreferencesManager.SOURCE_RECENT) {
             body.put("orderBy", JSONObject().put("field", "fileCreatedAt").put("direction", "desc"))
         }
         return body.toString()
     }
 
-    fun fetchAssets(baseUrl: String, apiKey: String, trustSsl: Boolean, source: String, albumId: String, count: Int): List<ImmichAsset> {
-        if (source == PreferencesManager.SOURCE_RANDOM) {
-            val body = apiPost(baseUrl, apiKey, trustSsl, "/search/random", buildSearchBody(source, albumId, count))
-            return parseAssetArray(JSONArray(body))
+    fun fetchAssets(baseUrl: String, apiKey: String, trustSsl: Boolean, source: String, albumIds: List<String>, count: Int): List<ImmichAsset> {
+        return if (source == PreferencesManager.SOURCE_RECENT) {
+            val body = apiPost(baseUrl, apiKey, trustSsl, "/search/metadata", buildSearchBody(source, albumIds, count))
+            val json = JSONObject(body)
+            val assets = json.optJSONObject("assets")
+            val items = assets?.optJSONArray("items") ?: JSONArray()
+            parseAssetArray(items)
+        } else {
+            val body = apiPost(baseUrl, apiKey, trustSsl, "/search/random", buildSearchBody(source, albumIds, count))
+            parseAssetArray(JSONArray(body))
         }
-        val body = apiPost(baseUrl, apiKey, trustSsl, "/search/metadata", buildSearchBody(source, albumId, count))
-        val json = JSONObject(body)
-        val assets = json.optJSONObject("assets")
-        val items = assets?.optJSONArray("items") ?: JSONArray()
-        return parseAssetArray(items)
     }
 
     private fun parseAssetArray(arr: JSONArray): List<ImmichAsset> {
@@ -198,29 +229,59 @@ class ImmichClient {
             val archived = o.optBoolean("isArchived", false)
             if (id.isNotBlank() && type == "IMAGE" && !archived &&
                 visibility.equals("timeline", ignoreCase = true)) {
-                result.add(ImmichAsset(id, o.optString("originalFileName", "")))
+                result.add(
+                    ImmichAsset(
+                        id = id,
+                        fileName = o.optString("originalFileName", ""),
+                        width = o.optInt("width", 0),
+                        height = o.optInt("height", 0),
+                        mimeType = o.optString("originalMimeType", "")
+                    )
+                )
             }
         }
         return result
     }
 
     /**
-     * Downloads a preview-sized image; returns the raw bytes or null on any failure.
+     * Downloads an asset; returns the bytes plus the server-reported MIME type, or null on
+     * any failure. [original] selects `/original` (full-resolution modes); otherwise the
+     * preview-sized JPEG thumbnail is fetched. HEIC/RAW originals are only requested when
+     * the caller has decided they are acceptable.
      *
      * The key travels in the `x-api-key` header. The plugin deliberately does not build
      * `...thumbnail?apiKey=<key>` URLs for Projectivy to fetch: Immich accepts that form,
      * but it puts a credential for the entire library into Projectivy's cache and into the
      * access log of any reverse proxy fronting Immich.
      */
-    fun fetchImage(baseUrl: String, apiKey: String, trustSsl: Boolean, assetId: String, size: String): ByteArray? {
+    fun fetchImage(
+        baseUrl: String,
+        apiKey: String,
+        trustSsl: Boolean,
+        assetId: String,
+        original: Boolean
+    ): ImmichImage? {
+        val path = if (original) {
+            "/api/assets/$assetId/original"
+        } else {
+            "/api/assets/$assetId/thumbnail?size=preview"
+        }
         val request = Request.Builder()
-            .url("$baseUrl/api/assets/$assetId/thumbnail?size=$size")
+            .url("$baseUrl$path")
             .header("x-api-key", apiKey)
             .get()
             .build()
         return try {
             client(trustSsl).newCall(request).execute().use { response ->
-                if (!response.isSuccessful) null else response.body?.bytes()
+                if (!response.isSuccessful) return null
+                val bytes = response.body?.bytes() ?: return null
+                val mimeType = response.header("Content-Type")
+                    ?.substringBefore(';')
+                    ?.trim()
+                    ?.lowercase()
+                    ?.takeIf { it.startsWith("image/") }
+                    ?: "image/jpeg"
+                ImmichImage(bytes, mimeType)
             }
         } catch (_: Exception) {
             null
@@ -230,11 +291,36 @@ class ImmichClient {
     fun testConnection(baseUrl: String, apiKey: String, trustSsl: Boolean): TestResult {
         return try {
             val albums = fetchAlbums(baseUrl, apiKey, trustSsl)
-            TestResult(true, "Connected: ${albums.size} album(s)", albums)
+            var message = "Connected: ${albums.size} album(s)"
+            if (PreferencesManager.quality != PreferencesManager.QUALITY_PREVIEW) {
+                downloadPermissionWarning(baseUrl, apiKey, trustSsl)?.let { message += " — $it" }
+            }
+            TestResult(true, message, albums)
         } catch (e: ImmichException) {
             TestResult(false, e.message ?: "Connection failed", emptyList())
         } catch (e: Exception) {
             TestResult(false, "Connection failed: ${e.message ?: e.javaClass.simpleName}", emptyList())
         }
+    }
+
+    /**
+     * Full-resolution wallpaper URLs hit /original, which Immich grants only with the
+     * asset download permission — unlike /thumbnail, which needs mere asset view. Without
+     * it Projectivy fails to download every wallpaper silently, so warn in Test connection.
+     */
+    private fun downloadPermissionWarning(baseUrl: String, apiKey: String, trustSsl: Boolean): String? = try {
+        val asset = fetchAssets(baseUrl, apiKey, trustSsl, PreferencesManager.SOURCE_RANDOM, emptyList(), 1).firstOrNull()
+            ?: return null
+        val request = Request.Builder()
+            .url("$baseUrl/api/assets/${asset.id}/original")
+            .header("x-api-key", apiKey)
+            .get()
+            .build()
+        client(trustSsl).newCall(request).execute().use { response ->
+            if (response.isSuccessful) null
+            else "cannot download full-resolution originals (HTTP ${response.code}); the API key needs the asset download permission"
+        }
+    } catch (e: Exception) {
+        null
     }
 }

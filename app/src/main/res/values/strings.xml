@@ -13,7 +13,7 @@
     <string name="setting_api_key">API key</string>
     <string name="setting_api_key_desc">Stored on this device only</string>
     <string name="setting_test_connection">Test connection</string>
-    <string name="setting_choose_album">Choose album</string>
+    <string name="setting_choose_album">Choose albums</string>
     <string name="setting_source_recent">Recent</string>
     <string name="setting_source_favorites">Favorites</string>
     <string name="setting_source_random">Random</string>
@@ -24,9 +24,20 @@
     <string name="setting_seconds_per_image_desc">Advisory only: Projectivy controls the real rotation interval (minimum 30 s)</string>
     <string name="setting_trust_ssl">Trust self-signed certificates</string>
     <string name="setting_trust_ssl_desc">Only enable for a server you control</string>
+    <string name="setting_landscape_only">Landscape photos only</string>
+    <string name="setting_landscape_only_desc">Skip portrait photos (they can break Projectivy\'s UI on some TVs)</string>
+    <string name="quality_preview">Preview (max compatibility)</string>
+    <string name="quality_full_jpeg_png">Full resolution — JPEG/PNG only</string>
+    <string name="quality_full_all">Full resolution — all formats</string>
+    <string name="http_warning_title">Unencrypted connection</string>
+    <string name="http_warning_message">This server URL uses HTTP (unencrypted). Your Immich API key will be sent without encryption and could be read by anyone on your network. Continue anyway?</string>
+    <string name="http_warning_continue">Continue</string>
+    <string name="http_warning_cancel">Cancel</string>
 
-    <string name="choose_album_title">Choose an album</string>
-    <string name="choose_album_desc">Select the album whose photos will be shown.</string>
+    <string name="choose_album_title">Choose albums</string>
+    <string name="choose_album_desc">Select one or more albums; photos from all of them will be shown.</string>
+    <string name="album_picker_done">Save selection</string>
+    <string name="album_picker_none">Select at least one album.</string>
     <string name="no_albums_run_test">No albums loaded. Run \u201cTest connection\u201d first.</string>
     <string name="loading_albums">Loading albums\u2026</string>
 

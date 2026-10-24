@@ -8,10 +8,10 @@ import android.os.ParcelFileDescriptor
 import java.io.FileNotFoundException
 
 /**
- * Serves cached wallpaper JPEGs to Projectivy via `content://` URIs.
+ * Serves cached wallpaper images to Projectivy via `content://` URIs.
  *
  * Projectivy downloads [Wallpaper.uri] itself and cannot attach the Immich `x-api-key`
- * header, so the plugin downloads the previews and exposes them here. The alternative —
+ * header, so the plugin downloads the images and exposes them here. The alternative —
  * handing Projectivy a direct Immich URL with the key in a query parameter — puts a
  * credential that reads the whole library into every consumer of this binder, into
  * Projectivy's own cache, and into the access log of any reverse proxy in front of
@@ -29,7 +29,8 @@ class WallpaperImageProvider : ContentProvider() {
 
     override fun onCreate(): Boolean = true
 
-    override fun getType(uri: Uri): String = "image/jpeg"
+    override fun getType(uri: Uri): String =
+        WallpaperCache.mimeTypeForName(uri.lastPathSegment ?: "")
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
         val name = uri.lastPathSegment ?: throw FileNotFoundException("Missing file name")
