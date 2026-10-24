@@ -4,8 +4,8 @@ appId = "tv.projectivy.plugin.wallpaperprovider.immich"
 compileSdk = "35"
 minSdk = "23"
 targetSdk = "34"
-versionCode = "3"
-versionName = "0.0.3"
+versionCode = "4"
+versionName = "0.0.4"
 
 # --- Toolchain (stable, known-good combination) ---
 kotlin = "2.0.21"
